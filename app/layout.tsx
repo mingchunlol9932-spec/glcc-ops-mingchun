@@ -1,8 +1,8 @@
 import './globals.css'
 
 export const metadata = {
-  title: 'Your AI HQ',
-  description: 'GLCC Starter — your business in one place',
+  title: 'Gepuklah',
+  description: 'Gepuklah — join the queue',
 }
 
 export const viewport = {

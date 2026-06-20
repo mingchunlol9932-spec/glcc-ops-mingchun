@@ -33,6 +33,7 @@ export default function JoinQueue() {
   return (
     <div className="qwrap">
       <div className="qcard">
+        <div className="qbrand">🍽️ Gepuklah</div>
         <h1 className="qtitle">Join the queue</h1>
         <p className="qsub">Hold your spot from anywhere — we'll show your number and wait time.</p>
         <form onSubmit={submit} className="qform">

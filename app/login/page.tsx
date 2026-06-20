@@ -15,7 +15,7 @@ function LoginForm() {
   return (
     <form className="login-card" action={formAction}>
       <div className="brand">
-        <span className="logo" aria-hidden="true" /> Your AI HQ
+        <span className="logo" aria-hidden="true" /> Gepuklah
       </div>
       <h1 className="login-title">Sign in</h1>
       <p className="login-sub">Use your team email and password.</p>

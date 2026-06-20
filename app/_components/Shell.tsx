@@ -36,7 +36,7 @@ export default function Shell({
         >
           <span /><span /><span />
         </button>
-        <div className="brand"><span className="logo" aria-hidden="true" /> Your AI HQ</div>
+        <div className="brand"><span className="logo" aria-hidden="true" /> Gepuklah</div>
       </header>
 
       {/* Tap-outside-to-close overlay (mobile only). */}
@@ -47,7 +47,7 @@ export default function Shell({
       />
 
       <aside className={`side ${open ? 'open' : ''}`}>
-        <div className="brand"><span className="logo" aria-hidden="true" /> Your AI HQ</div>
+        <div className="brand"><span className="logo" aria-hidden="true" /> Gepuklah</div>
         <Nav tabs={tabs} onNavigate={() => setOpen(false)} />
         <div className="userbox">
           <div className="userbox-id">

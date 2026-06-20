@@ -235,6 +235,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
   border: 1px solid var(--border); border-radius: 16px; padding: 26px 22px;
 }
 .qcard.center { text-align: center; }
+.qbrand { font-size: 15px; font-weight: 700; color: var(--amber); margin: 0 0 14px; letter-spacing: 0.2px; }
 .qtitle { font-size: 22px; font-weight: 700; margin: 0 0 6px; color: var(--text); }
 .qtitle.sm { font-size: 16px; }
 .qsub { color: var(--muted); font-size: 14px; line-height: 1.5; margin: 0 0 18px; }

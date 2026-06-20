@@ -94,5 +94,5 @@ export default function QueueStatus() {
 }
 
 function Frame({ children, hot }: { children: React.ReactNode; hot?: boolean }) {
-  return <div className={`qwrap${hot ? ' hot' : ''}`}><div className="qcard center">{children}</div></div>
+  return <div className={`qwrap${hot ? ' hot' : ''}`}><div className="qcard center"><div className="qbrand">🍽️ Gepuklah</div>{children}</div></div>
 }
