@@ -14,18 +14,23 @@ type FloorTable = {
 // Spatial position of each table on the map (left%, top%, width%, height%) —
 // laid out to mirror the real floor plan: A left, C top, B middle, D bottom,
 // E right, kitchen far right.
-const POS: Record<string, [number, number, number, number]> = {
-  A1: [1, 6, 11, 24], A2: [1, 70, 11, 24],
-  // Zone C — 6 square 2-tops along the top
-  C1: [15, 4, 7.5, 21], C2: [23.3, 4, 7.5, 21], C3: [31.6, 4, 7.5, 21],
-  C4: [39.9, 4, 7.5, 21], C5: [48.2, 4, 7.5, 21], C6: [56.5, 4, 7.5, 21],
-  // Zone B — round 4-tops + long communal 8-top
-  B1: [15, 38, 13, 24], B3: [30, 38, 20, 24], B2: [52, 38, 13, 24],
-  // Zone D — 8 square 2-tops along the bottom
-  D1: [14, 72, 6.4, 21], D2: [21.1, 72, 6.4, 21], D3: [28.2, 72, 6.4, 21], D4: [35.3, 72, 6.4, 21],
-  D5: [42.4, 72, 6.4, 21], D6: [49.5, 72, 6.4, 21], D7: [56.6, 72, 6.4, 21], D8: [63.7, 72, 6.4, 21],
-  // Zone E — round 4-tops
-  E1: [67, 8, 14, 26], E2: [67, 44, 14, 26],
+// Each table: [left%, top%, width%, shape] — height comes from the shape
+// (sq/ci are square via aspect-ratio; re is a wide rectangle). Positioned to
+// mirror the floor plan.
+type Shape = 'sq' | 'ci' | 're'
+const POS: Record<string, [number, number, number, Shape]> = {
+  A1: [2, 8, 9, 'sq'], A2: [2, 70, 9, 'sq'],
+  // Zone C — 3 columns of stacked square pairs (C1/C2, C3/C4, C5/C6)
+  C1: [15, 4, 8, 'sq'], C2: [15, 20, 8, 'sq'],
+  C3: [26, 4, 8, 'sq'], C4: [26, 20, 8, 'sq'],
+  C5: [37, 4, 8, 'sq'], C6: [37, 20, 8, 'sq'],
+  // Zone B — round 4-tops (circles) + long communal rectangle
+  B1: [15, 42, 13, 'ci'], B3: [31, 46, 18, 're'], B2: [52, 42, 13, 'ci'],
+  // Zone D — single row of 8 square 2-tops
+  D1: [14, 75, 6.5, 'sq'], D2: [21, 75, 6.5, 'sq'], D3: [28, 75, 6.5, 'sq'], D4: [35, 75, 6.5, 'sq'],
+  D5: [42, 75, 6.5, 'sq'], D6: [49, 75, 6.5, 'sq'], D7: [56, 75, 6.5, 'sq'], D8: [63, 75, 6.5, 'sq'],
+  // Zone E — round 4-tops (circles), stacked
+  E1: [67, 8, 13, 'ci'], E2: [67, 44, 13, 'ci'],
 }
 const ZCOLOR: Record<string, string> = {
   A: '#22c55e', B: '#38bdf8', C: '#a855f7', D: '#f87171', E: '#f59e0b',
@@ -205,13 +210,14 @@ export default function StaffQueue() {
           if (!p) return null
           const isPicked = picked.includes(t.id)
           const fits = !t.occupied && t.seats >= (seatingEntry?.party_size ?? 0)
-          const cls = t.occupied
-            ? `qmt occ${seating ? ' dim' : ''}`
-            : `qmt${seating ? (isPicked ? ' picked' : (fits ? ' seatable' : ' seatfree')) : ''}`
+          const state = t.occupied
+            ? ` occ${seating ? ' dim' : ''}`
+            : (seating ? (isPicked ? ' picked' : (fits ? ' seatable' : ' seatfree')) : '')
+          const cls = `qmt ${p[3]}${state}`
           return (
             <div key={t.id} className={cls}
               style={{
-                left: `${p[0]}%`, top: `${p[1]}%`, width: `${p[2]}%`, height: `${p[3]}%`,
+                left: `${p[0]}%`, top: `${p[1]}%`, width: `${p[2]}%`,
                 borderColor: t.occupied ? undefined : ZCOLOR[t.zone],
               }}
               onClick={() => clickTable(t)}>
