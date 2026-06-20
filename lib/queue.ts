@@ -30,14 +30,24 @@ function startOfTodayMYT(): string {
   return new Date(d.getTime() - off).toISOString()
 }
 
+// Short in-process cache for the average wait. Every waiting phone polls the
+// status endpoint, so without this each poll would hit queue_settings — at 300
+// guests that's a needless flood of identical reads. 15s staleness is fine for
+// an estimate, and a staff change still shows up within ~15s.
+let avgCache: { v: number; t: number } | null = null
+
 export async function getAvgMinutes(): Promise<number> {
+  if (avgCache && Date.now() - avgCache.t < 15_000) return avgCache.v
   if (!supabaseConfigured) return 45
   const { data } = await supabase.from('queue_settings').select('avg_minutes').eq('id', 1).maybeSingle()
-  return data?.avg_minutes ?? 45
+  const v = data?.avg_minutes ?? 45
+  avgCache = { v, t: Date.now() }
+  return v
 }
 
 export async function setAvgMinutes(min: number): Promise<void> {
   await supabase.from('queue_settings').upsert({ id: 1, avg_minutes: min })
+  avgCache = { v: min, t: Date.now() } // reflect the change immediately
 }
 
 export async function todaysEntries(): Promise<QueueEntry[]> {
@@ -52,11 +62,12 @@ export async function todaysEntries(): Promise<QueueEntry[]> {
 }
 
 export async function createEntry(name: string, partySize: number, phone: string | null): Promise<QueueEntry> {
-  const today = await todaysEntries()
-  const next = today.reduce((m, e) => Math.max(m, e.queue_number), 0) + 1
+  // queue_number is assigned atomically by the DB trigger (assign_queue_number,
+  // see supabase/queue-scale.sql), so concurrent joins can never collide — we no
+  // longer compute it in JS. The DB also gives us the assigned number back.
   const { data, error } = await supabase
     .from('queue_entries')
-    .insert({ name, party_size: partySize, phone, status: 'waiting', queue_number: next })
+    .insert({ name, party_size: partySize, phone, status: 'waiting' })
     .select().single()
   if (error) throw new Error(error.message)
   return data as QueueEntry
@@ -72,9 +83,26 @@ export async function patchEntry(id: string, patch: Partial<QueueEntry>): Promis
   await supabase.from('queue_entries').update(patch).eq('id', id)
 }
 
-// How many active groups sit ahead of this one (lower queue_number, still in line).
+// How many active groups sit ahead of this one (lower queue_number, still in
+// line). Used by the staff console, which already has every row loaded.
 export function groupsAhead(entry: QueueEntry, all: QueueEntry[]): number {
   return all.filter(e => ACTIVE.includes(e.status) && e.queue_number < entry.queue_number).length
+}
+
+// Same count, but as a DB-side COUNT instead of pulling every row — this is what
+// the customer status endpoint uses on every poll, so 300 phones polling don't
+// each transfer the whole day's table. Cancellations drop out automatically
+// (cancelled isn't in ACTIVE), so positions shrink as people leave.
+export async function groupsAheadCount(entry: QueueEntry): Promise<number> {
+  if (!supabaseConfigured) return 0
+  const { count, error } = await supabase
+    .from('queue_entries')
+    .select('id', { count: 'exact', head: true })
+    .gte('created_at', startOfTodayMYT())
+    .in('status', ACTIVE)
+    .lt('queue_number', entry.queue_number)
+  if (error) { console.warn('[queue] ahead-count failed:', error.message); return 0 }
+  return count ?? 0
 }
 
 // ---- Restaurant tables (floor layout) ----
