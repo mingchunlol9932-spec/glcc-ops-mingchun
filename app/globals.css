@@ -557,3 +557,17 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 .qlist2 { display: flex; flex-direction: column; gap: 8px; }
 .qrow2 { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; flex-wrap: wrap; }
 
+/* ---- Bills & POS page ---- */
+.billbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 14px; }
+.billdate { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.billdate input { background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 9px; padding: 8px 10px; font-size: 14px; color-scheme: dark; }
+.billbox { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 22px; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.billcsv { width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; color: var(--text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; resize: vertical; }
+.billin { width: 100%; min-width: 80px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 7px 9px; color: var(--text); font-size: 14px; }
+.billin:focus { outline: none; border-color: var(--amber); }
+.import-result { font-size: 13px; color: var(--muted); line-height: 1.6; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; width: 100%; }
+.import-result b { color: var(--text); }
+.fmrow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.import-result ul { margin: 6px 0 0; padding-left: 18px; }
+.warn { color: #ff9b9b; font-weight: 600; }
+

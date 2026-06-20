@@ -23,7 +23,6 @@ const TABS = [
   { href: '/ops', label: 'Floor' },
   { href: '/ops/queue', label: 'Queue' },
   { href: '/ops/dashboard', label: 'Dashboard' },
-  { href: '/ops/reports', label: 'Reports' },
   { href: '/ops/settings', label: 'Settings' },
 ]
 

@@ -1,6 +1,6 @@
 import {
   seatGroup, customerLeft, markReady, markCleaning,
-  addQueueEntry, cancelQueue, noShowQueue, lostCustomer, setSetting, setTableCapacity,
+  addQueueEntry, cancelQueue, noShowQueue, setSetting, setTableCapacity, setQueueOpen,
 } from '@/lib/ops'
 import { checkPin } from '@/lib/queue'
 import { supabase } from '@/lib/supabase'
@@ -36,7 +36,7 @@ export async function POST(req: Request) {
       case 'add_queue': await addQueueEntry(str('name') || null, num('pax'), str('phone') || null, str('notes') || null); break
       case 'cancel_queue': await cancelQueue(str('id')); break
       case 'no_show': await noShowQueue(str('id')); break
-      case 'lost': await lostCustomer(str('queue_id') || null, num('pax'), str('reason') || 'Other', str('note') || null); break
+      case 'set_queue_open': await setQueueOpen(str('open') === 'true'); break
       case 'set_setting': await setSetting(str('key'), str('value')); break
       case 'set_capacity': await setTableCapacity(str('table_id'), num('seats')); break
       default: return Response.json({ ok: false, error: 'bad_action' }, { status: 400 })

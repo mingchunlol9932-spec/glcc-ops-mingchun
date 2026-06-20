@@ -6,16 +6,8 @@ type Settings = Record<string, number | boolean>
 type Tbl = { id: string; label: string; zone: string; seats: number }
 const NUMS: [string, string][] = [
   ['max_capacity', 'Max capacity (pax)'],
-  ['target_average_duration', 'Target avg dining (min)'],
+  ['target_average_duration', 'Target table time (min)'],
   ['cleaning_minutes', 'Cleaning flag after (min)'],
-  ['good_day_target_pax', 'Good-day target pax'],
-  ['target_utilization', 'Target utilization (%)'],
-  ['peak_utilization_target', 'Peak-hour util target (%)'],
-  ['lost_pax_good_threshold', 'Lost pax — good ≤'],
-  ['lost_pax_bad_threshold', 'Lost pax — bad >'],
-  ['no_show_good_threshold', 'No-show rate good ≤ (%)'],
-  ['open_hour', 'Open hour (0–23)'],
-  ['close_hour', 'Close hour (0–23)'],
 ]
 
 export default function SettingsPage() {
@@ -40,7 +32,7 @@ export default function SettingsPage() {
         </label>
       </div>
 
-      <h2 className="sec">Targets &amp; thresholds</h2>
+      <h2 className="sec">Limits</h2>
       <div className="setgrid">
         {NUMS.map(([key, lbl]) => (
           <label key={key} className="fld">{lbl}

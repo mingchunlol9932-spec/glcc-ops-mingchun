@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation'
 
 type Status = {
   ok: boolean
-  status: 'waiting' | 'called' | 'arrived' | 'no_show' | 'cancelled'
+  status: 'waiting' | 'called' | 'seated' | 'arrived' | 'no_show' | 'cancelled'
   queue_number: number
   table_number: string | null
   position: number | null
@@ -73,7 +73,7 @@ export default function QueueStatus() {
       <p className="qnum">#{d.queue_number}</p>
     </Frame>
   )
-  if (d.status === 'arrived') return <Frame><h1 className="qbig">Seated 🎉</h1><p className="qsub">{d.table_number ? `Table ${d.table_number} — enjoy your meal!` : 'Enjoy your meal!'}</p></Frame>
+  if (d.status === 'seated' || d.status === 'arrived') return <Frame><h1 className="qbig">Seated 🎉</h1><p className="qsub">{d.table_number ? `Table ${d.table_number} — enjoy your meal!` : 'Enjoy your meal!'}</p></Frame>
   if (d.status === 'no_show') return <Frame><h1 className="qbig">Marked as no-show</h1><p className="qsub">Please see the host if you'd like to re-join.</p></Frame>
   if (d.status === 'cancelled') return <Frame><h1 className="qbig">You left the queue</h1></Frame>
 

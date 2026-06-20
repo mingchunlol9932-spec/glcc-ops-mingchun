@@ -42,8 +42,8 @@ export default function JoinQueue() {
           <label>Party size
             <input type="number" min="1" max="99" value={party} onChange={e => setParty(e.target.value)} required />
           </label>
-          <label>Phone <span className="qopt">(optional)</span>
-            <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} placeholder="e.g. 012-3456789" />
+          <label>Phone
+            <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} required placeholder="e.g. 012-3456789" />
           </label>
           {err && <p className="qerr">{err}</p>}
           <button className="qbtn" disabled={busy}>{busy ? 'Joining…' : 'Join queue'}</button>

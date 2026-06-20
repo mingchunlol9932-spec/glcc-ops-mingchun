@@ -9,23 +9,15 @@ export function startOfDayMYT(d = new Date()): Date {
   return new Date(x.getTime() - MYT)
 }
 export function addDays(d: Date, n: number): Date { return new Date(d.getTime() + n * 864e5) }
-function mytHour(iso: string): number { return new Date(new Date(iso).getTime() + MYT).getUTCHours() }
-function mytDayKey(iso: string): string { return new Date(new Date(iso).getTime() + MYT).toISOString().slice(0, 10) }
 const minsSince = (iso: string) => Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
 export const formatQ = (n: number) => 'Q' + String(n).padStart(3, '0')
 
 // ---------------- settings ----------------
 export type Settings = {
-  max_capacity: number; target_average_duration: number; cleaning_minutes: number
-  allow_split_tables: boolean; good_day_target_pax: number; target_utilization: number
-  peak_utilization_target: number; lost_pax_good_threshold: number; lost_pax_bad_threshold: number
-  no_show_good_threshold: number; open_hour: number; close_hour: number
+  max_capacity: number; target_average_duration: number; cleaning_minutes: number; allow_split_tables: boolean
 }
 export const DEFAULTS: Settings = {
   max_capacity: 56, target_average_duration: 45, cleaning_minutes: 5, allow_split_tables: true,
-  good_day_target_pax: 180, target_utilization: 70, peak_utilization_target: 85,
-  lost_pax_good_threshold: 10, lost_pax_bad_threshold: 30, no_show_good_threshold: 5,
-  open_hour: 10, close_hour: 22,
 }
 export async function getSettings(): Promise<Settings> {
   if (!supabaseConfigured) return { ...DEFAULTS }
@@ -39,6 +31,17 @@ export async function getSettings(): Promise<Settings> {
 }
 export async function setSetting(key: string, value: string): Promise<void> {
   await supabase.from('app_settings').upsert({ key, value, updated_at: new Date().toISOString() })
+}
+
+// ---------------- queue open / close ----------------
+// Stored as an app_settings row; defaults to OPEN if never set.
+export async function getQueueOpen(): Promise<boolean> {
+  if (!supabaseConfigured) return true
+  const { data } = await supabase.from('app_settings').select('value').eq('key', 'queue_open').maybeSingle()
+  return data ? data.value !== 'false' : true
+}
+export async function setQueueOpen(open: boolean): Promise<void> {
+  await supabase.from('app_settings').upsert({ key: 'queue_open', value: open ? 'true' : 'false', updated_at: new Date().toISOString() })
 }
 
 // ---------------- tables ----------------
@@ -62,7 +65,7 @@ export async function setTableCapacity(id: string, seats: number) {
   await supabase.from('restaurant_tables').update({ seats: Math.max(1, seats) }).eq('id', id)
 }
 
-// ---------------- visits ----------------
+// ---------------- visits (table sessions = the timer) ----------------
 export type Visit = {
   id: string; queue_entry_id: string | null; customer_name: string | null; pax_count: number
   seated_at: string; left_at: string | null; duration_minutes: number | null; status: string; notes: string | null
@@ -105,6 +108,7 @@ export async function seatGroup(opts: {
   return v as Visit
 }
 
+// Table completed — stamps the duration (timer total) and flags the table for cleaning.
 export async function customerLeft(visitId: string): Promise<void> {
   const { data: v } = await supabase.from('visits').select('*').eq('id', visitId).maybeSingle()
   if (!v || v.status !== 'seated') return
@@ -146,10 +150,6 @@ export async function cancelQueue(id: string) {
 export async function noShowQueue(id: string) {
   await supabase.from('queue_entries').update({ status: 'no_show', no_show_at: new Date().toISOString() }).eq('id', id)
 }
-export async function lostCustomer(queueId: string | null, pax: number, reason: string, note: string | null) {
-  if (queueId) await supabase.from('queue_entries').update({ status: 'lost', lost_at: new Date().toISOString() }).eq('id', queueId)
-  await supabase.from('lost_customers').insert({ queue_entry_id: queueId, pax_count: Math.max(1, Math.floor(pax)), reason, note })
-}
 
 // ---------------- seating suggestions ----------------
 function pickCombo(avail: { id: string; label: string; seats: number }[], pax: number): { id: string; label: string; seats: number }[] | null {
@@ -170,8 +170,6 @@ function suggestFor(pax: number, avail: { id: string; label: string; seats: numb
 export async function getFloorState() {
   const settings = await getSettings()
   const [tables, visits, queue] = await Promise.all([listTables(), activeVisits(), todaysQueue()])
-  const { data: completedToday } = await supabase.from('visits')
-    .select('pax_count').eq('status', 'completed').gte('seated_at', startOfDayMYT().toISOString())
 
   const visitById = new Map(visits.map(v => [v.id, v]))
   const qById = new Map(queue.map(q => [q.id, q]))
@@ -199,7 +197,6 @@ export async function getFloorState() {
   const kpi = {
     seatedPax: seated, maxCapacity: settings.max_capacity, availableSeats,
     waitingGroups: waiting.length, waitingPax,
-    servedPax: (completedToday ?? []).reduce((s, v) => s + v.pax_count, 0),
     tablesSeated: floorTables.filter(t => t.status === 'seated').length,
     tablesCleaning: floorTables.filter(t => t.status === 'cleaning').length,
     tablesAvailable: avail.length,
@@ -243,182 +240,73 @@ function computeNextAction(
   return { type: 'ok', text: 'Operations normal.' }
 }
 
-// ---------------- metrics over a date range ----------------
-type Raw = {
-  visits: Visit[]; queue: QEntry[]; lost: { pax_count: number; reason: string | null; created_at: string }[]
-  visitTables: { visit_id: string; table_id: string }[]
-}
-async function rangeData(from: Date, to: Date): Promise<Raw> {
-  const [v, q, l] = await Promise.all([
-    supabase.from('visits').select('*').gte('seated_at', from.toISOString()).lt('seated_at', to.toISOString()),
-    supabase.from('queue_entries').select('*').gte('created_at', from.toISOString()).lt('created_at', to.toISOString()),
-    supabase.from('lost_customers').select('pax_count,reason,created_at').gte('created_at', from.toISOString()).lt('created_at', to.toISOString()),
+// ---------------- simple daily dashboard ----------------
+export async function getSimpleDashboard() {
+  const from = startOfDayMYT(), to = addDays(from, 1)
+  const [qRes, vRes, queueOpen, settings] = await Promise.all([
+    supabase.from('queue_entries').select('status,party_size,created_at,seated_at')
+      .gte('created_at', from.toISOString()).lt('created_at', to.toISOString()),
+    supabase.from('visits').select('status,pax_count,seated_at,duration_minutes')
+      .gte('seated_at', from.toISOString()).lt('seated_at', to.toISOString()),
+    getQueueOpen(),
+    getSettings(),
   ])
-  const visits = (v.data ?? []) as Visit[]
-  const ids = visits.map(x => x.id)
-  let visitTables: { visit_id: string; table_id: string }[] = []
-  if (ids.length) {
-    const vt = await supabase.from('visit_tables').select('visit_id,table_id').in('visit_id', ids)
-    visitTables = vt.data ?? []
-  }
-  return { visits, queue: (q.data ?? []) as QEntry[], lost: l.data ?? [], visitTables }
-}
-const mean = (a: number[]) => a.length ? a.reduce((s, x) => s + x, 0) / a.length : 0
-const median = (a: number[]) => {
-  if (!a.length) return 0
-  const s = [...a].sort((x, y) => x - y); const m = Math.floor(s.length / 2)
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2
-}
-function operatingMinutes(from: Date, to: Date, s: Settings): number {
-  const win = Math.max(1, s.close_hour - s.open_hour) * 60
-  let total = 0
-  for (let d = startOfDayMYT(from); d < to; d = addDays(d, 1)) {
-    const open = new Date(d.getTime() + s.open_hour * 3600e3)
-    const close = new Date(d.getTime() + s.close_hour * 3600e3)
-    const end = Math.min(close.getTime(), Date.now())
-    total += Math.max(0, Math.min(end, close.getTime()) - open.getTime()) / 60000
-  }
-  return total || win
-}
+  const q = (qRes.data ?? []) as { status: string; party_size: number; created_at: string; seated_at: string | null }[]
+  const v = (vRes.data ?? []) as { status: string; pax_count: number; seated_at: string; duration_minutes: number | null }[]
+  const avg = (a: number[]) => a.length ? Math.round(a.reduce((s, n) => s + n, 0) / a.length) : 0
 
-export type Metrics = {
-  paxServed: number; groupsServed: number; avgDuration: number; medianDuration: number
-  fastestTurn: number | null; slowestTurn: number | null; turnoverCount: number; avgPaxPerGroup: number
-  seatUtilization: number; peakHour: string; lostPax: number; noShows: number; cancellations: number
-  noShowRate: number; cancelRate: number; queueConversion: number; lostByReason: Record<string, number>
-  paxByHour: { hour: number; pax: number }[]; peakHourUtilization: number
-}
-function metricsFrom(raw: Raw, s: Settings, from: Date, to: Date, activeSeatMin = 0): Metrics {
-  const completed = raw.visits.filter(v => v.status === 'completed')
-  const durations = completed.map(v => v.duration_minutes ?? 0).filter(n => n > 0)
-  const paxServed = completed.reduce((sm, v) => sm + v.pax_count, 0)
-  const groupsServed = completed.length
-
-  // pax demand by hour (from all seated visits in range)
-  const byHour = new Map<number, number>()
-  for (const v of raw.visits) byHour.set(mytHour(v.seated_at), (byHour.get(mytHour(v.seated_at)) ?? 0) + v.pax_count)
-  const paxByHour = Array.from(byHour.entries()).map(([hour, pax]) => ({ hour, pax })).sort((a, b) => a.hour - b.hour)
-  const peak = paxByHour.slice().sort((a, b) => b.pax - a.pax)[0]
-  const peakHour = peak ? `${String(peak.hour).padStart(2, '0')}:00` : '—'
-
-  // seat utilization = occupied seat-minutes / (capacity * operating minutes)
-  const occSeatMin = completed.reduce((sm, v) => sm + v.pax_count * (v.duration_minutes ?? 0), 0) + activeSeatMin
-  const opMin = operatingMinutes(from, to, s)
-  const seatUtilization = Math.min(100, Math.round((occSeatMin / (s.max_capacity * opMin)) * 100))
-  // peak-hour utilization: pax in peak hour vs capacity
-  const peakHourUtilization = peak ? Math.min(100, Math.round((peak.pax / s.max_capacity) * 100)) : 0
-
-  const noShows = raw.queue.filter(q => q.status === 'no_show')
-  const cancels = raw.queue.filter(q => q.status === 'cancelled')
-  const joined = raw.queue.length
-  const seatedFromQueue = raw.queue.filter(q => q.status === 'seated').length
-  const lostByReason: Record<string, number> = {}
-  for (const l of raw.lost) lostByReason[l.reason ?? 'Other'] = (lostByReason[l.reason ?? 'Other'] ?? 0) + l.pax_count
+  const waits = q.filter(e => e.seated_at).map(e => Math.max(0, Math.round((new Date(e.seated_at!).getTime() - new Date(e.created_at).getTime()) / 60000)))
+  const completed = v.filter(x => x.status === 'completed')
+  const durs = completed.map(x => x.duration_minutes ?? 0).filter(n => n > 0)
 
   return {
-    paxServed, groupsServed,
-    avgDuration: Math.round(mean(durations)), medianDuration: Math.round(median(durations)),
-    fastestTurn: durations.length ? Math.min(...durations) : null,
-    slowestTurn: durations.length ? Math.max(...durations) : null,
-    turnoverCount: groupsServed, avgPaxPerGroup: groupsServed ? Math.round((paxServed / groupsServed) * 10) / 10 : 0,
-    seatUtilization, peakHour, peakHourUtilization,
-    lostPax: raw.lost.reduce((sm, l) => sm + l.pax_count, 0),
-    noShows: noShows.length, cancellations: cancels.length,
-    noShowRate: joined ? Math.round((noShows.length / joined) * 100) : 0,
-    cancelRate: joined ? Math.round((cancels.length / joined) * 100) : 0,
-    queueConversion: joined ? Math.round((seatedFromQueue / joined) * 100) : 0,
-    lostByReason, paxByHour,
+    queueOpen,
+    maxCapacity: settings.max_capacity,
+    waitingPax: q.filter(e => e.status === 'waiting').reduce((s, e) => s + e.party_size, 0),
+    seatedPax: v.filter(x => x.status === 'seated').reduce((s, x) => s + x.pax_count, 0),
+    avgWaitMinutes: avg(waits),
+    avgTableMinutes: avg(durs),
+    completedToday: completed.length,
+    noShowsToday: q.filter(e => e.status === 'no_show').length,
+    cancelledToday: q.filter(e => e.status === 'cancelled').length,
   }
 }
 
-// ---------------- good day / bad day score (edit the points here) ----------------
-export function scoreDay(m: Metrics, s: Settings): { score: number; status: 'Good day' | 'Average day' | 'Bad day'; reasons: string[] } {
-  let score = 0
-  const good: string[] = [], bad: string[] = []
-  if (m.paxServed >= s.good_day_target_pax) { score += 30; good.push('high pax served') }
-  if (m.seatUtilization >= s.target_utilization) { score += 20; good.push('strong seat utilization') }
-  if (m.avgDuration > 0 && m.avgDuration <= s.target_average_duration) { score += 20; good.push('healthy dining duration') }
-  if (m.lostPax <= s.lost_pax_good_threshold) { score += 10; good.push('few lost customers') }
-  if (m.noShowRate <= s.no_show_good_threshold) { score += 10; good.push('low no-show rate') }
-  if (m.peakHourUtilization >= s.peak_utilization_target) { score += 10; good.push('high peak-hour utilization') }
+// ---------------- daily CSV export (queue + table session) ----------------
+export async function getDayExport(dayStr: string) {
+  if (!supabaseConfigured) return []
+  const from = new Date(`${dayStr}T00:00:00+08:00`), to = new Date(from.getTime() + 864e5)
+  const [qRes, vRes, tRes] = await Promise.all([
+    supabase.from('queue_entries').select('*').gte('created_at', from.toISOString()).lt('created_at', to.toISOString()).order('queue_number'),
+    supabase.from('visits').select('*').gte('seated_at', from.toISOString()).lt('seated_at', to.toISOString()),
+    supabase.from('restaurant_tables').select('id,label'),
+  ])
+  const entries = (qRes.data ?? []) as QEntry[]
+  const visits = (vRes.data ?? []) as Visit[]
+  const labelById = new Map((tRes.data ?? []).map((t: { id: string; label: string }) => [t.id, t.label]))
 
-  if (m.avgDuration > s.target_average_duration * 1.25) { score -= 20; bad.push('dining duration too long') }
-  if (m.lostPax > s.lost_pax_bad_threshold) { score -= 20; bad.push('high lost customers') }
-  if (m.noShowRate > s.no_show_good_threshold * 2) { score -= 10; bad.push('high no-show rate') }
-  if (m.cancelRate > 20) { score -= 10; bad.push('high cancellation rate') }
-  if (m.seatUtilization > 0 && m.seatUtilization < s.target_utilization * 0.6) { score -= 20; bad.push('low seat utilization') }
-
-  score = Math.max(0, Math.min(100, score))
-  const status = score >= 70 ? 'Good day' : score >= 40 ? 'Average day' : 'Bad day'
-  const reasons = status === 'Bad day' && bad.length ? bad : good.length ? good : ['not enough data yet']
-  return { score, status, reasons }
-}
-
-// ---------------- dashboard ----------------
-export async function getDashboard() {
-  const s = await getSettings()
-  const from = startOfDayMYT(), to = addDays(from, 1)
-  const [raw, active] = await Promise.all([rangeData(from, to), activeVisits()])
-  const activeSeatMin = active.reduce((sm, v) => sm + v.pax_count * minsSince(v.seated_at), 0)
-  const m = metricsFrom(raw, s, from, to, activeSeatMin)
-  const score = scoreDay(m, s)
-  const seated = active.reduce((sm, v) => sm + v.pax_count, 0)
-  const tables = await listTables()
-  const waiting = raw.queue.filter(q => q.status === 'waiting')
-  const live = {
-    seatedPax: seated, maxCapacity: s.max_capacity, availableSeats: s.max_capacity - seated,
-    waitingGroups: waiting.length, waitingPax: waiting.reduce((x, q) => x + q.party_size, 0),
-    tablesSeated: tables.filter(t => t.status === 'seated').length,
-    tablesCleaning: tables.filter(t => t.status === 'cleaning').length,
-    tablesAvailable: tables.filter(t => t.status === 'available').length,
+  const vtByVisit = new Map<string, string[]>()
+  const visitIds = visits.map(v => v.id)
+  if (visitIds.length) {
+    const { data: vt } = await supabase.from('visit_tables').select('visit_id,table_id').in('visit_id', visitIds)
+    for (const r of (vt ?? []) as { visit_id: string; table_id: string }[]) {
+      const a = vtByVisit.get(r.visit_id) ?? []; a.push(labelById.get(r.table_id) ?? r.table_id); vtByVisit.set(r.visit_id, a)
+    }
   }
-  const tablePerf = tablePerformance(raw, tables)
-  return { settings: s, live, metrics: m, score, tablePerf }
-}
+  const visitByQueue = new Map<string, Visit>()
+  for (const v of visits) if (v.queue_entry_id) visitByQueue.set(v.queue_entry_id, v)
+  const fmt = (iso: string | null) => iso ? new Date(new Date(iso).getTime() + MYT).toISOString().slice(0, 16).replace('T', ' ') : ''
 
-function tablePerformance(raw: Raw, tables: OpsTable[]) {
-  const vById = new Map(raw.visits.map(v => [v.id, v]))
-  const byTable = new Map<string, { turns: number; pax: number; mins: number[]; occ: number }>()
-  for (const vt of raw.visitTables) {
-    const v = vById.get(vt.visit_id); if (!v || v.status !== 'completed') continue
-    const cur = byTable.get(vt.table_id) ?? { turns: 0, pax: 0, mins: [], occ: 0 }
-    cur.turns += 1; cur.pax += v.pax_count; cur.occ += v.duration_minutes ?? 0
-    if (v.duration_minutes) cur.mins.push(v.duration_minutes)
-    byTable.set(vt.table_id, cur)
-  }
-  return tables.map(t => {
-    const d = byTable.get(t.id) ?? { turns: 0, pax: 0, mins: [], occ: 0 }
-    return { code: t.label, turns: d.turns, pax: d.pax, avgDuration: Math.round(mean(d.mins)), occupiedMin: d.occ }
-  }).sort((a, b) => b.turns - a.turns)
+  return entries.map(e => {
+    const v = visitByQueue.get(e.id) ?? null
+    const tables = v ? (vtByVisit.get(v.id) ?? []).sort().join('+') : ''
+    const waitMin = e.seated_at ? Math.max(0, Math.round((new Date(e.seated_at).getTime() - new Date(e.created_at).getTime()) / 60000)) : ''
+    const tableMin = v ? (v.duration_minutes != null ? v.duration_minutes : (v.status === 'seated' ? Math.round((Date.now() - new Date(v.seated_at).getTime()) / 60000) : '')) : ''
+    return {
+      queue_number: e.queue_number, name: e.name ?? '', phone: e.phone ?? '', pax: e.party_size,
+      status: e.status, table: tables, joined_at: fmt(e.created_at), seated_at: fmt(e.seated_at),
+      completed_at: v && v.left_at ? fmt(v.left_at) : '', wait_minutes: waitMin, table_minutes: tableMin,
+    }
+  })
 }
-
-// ---------------- reports (date range) ----------------
-export async function getReport(from: Date, to: Date) {
-  const s = await getSettings()
-  const raw = await rangeData(from, to)
-  const m = metricsFrom(raw, s, from, to)
-  const tables = await listTables()
-  // best/worst day by pax served
-  const byDay = new Map<string, number>()
-  for (const v of raw.visits.filter(v => v.status === 'completed')) byDay.set(mytDayKey(v.seated_at), (byDay.get(mytDayKey(v.seated_at)) ?? 0) + v.pax_count)
-  const days = Array.from(byDay.entries()).map(([date, pax]) => ({ date, pax }))
-  const bestDay = days.slice().sort((a, b) => b.pax - a.pax)[0] ?? null
-  const worstDay = days.slice().sort((a, b) => a.pax - b.pax)[0] ?? null
-  const hours = m.paxByHour.slice().sort((a, b) => b.pax - a.pax)
-  const bestHour = hours[0] ? `${String(hours[0].hour).padStart(2, '0')}:00` : '—'
-  const worstHour = hours[hours.length - 1] ? `${String(hours[hours.length - 1].hour).padStart(2, '0')}:00` : '—'
-  return { settings: s, metrics: m, bestDay, worstDay, bestHour, worstHour, tablePerf: tablePerformance(raw, tables) }
-}
-
-// Resolve a named period to a [from,to) range (MYT day boundaries).
-export function periodRange(period: string, fromStr?: string, toStr?: string): { from: Date; to: Date } {
-  const today = startOfDayMYT()
-  if (period === 'today') return { from: today, to: addDays(today, 1) }
-  if (period === 'yesterday') return { from: addDays(today, -1), to: today }
-  if (period === 'week') return { from: addDays(today, -6), to: addDays(today, 1) }
-  if (period === 'month') return { from: addDays(today, -29), to: addDays(today, 1) }
-  if (period === 'custom' && fromStr && toStr) {
-    return { from: startOfDayMYT(new Date(fromStr)), to: addDays(startOfDayMYT(new Date(toStr)), 1) }
-  }
-  return { from: today, to: addDays(today, 1) }
-}
+export const EXPORT_COLUMNS = ['queue_number', 'name', 'phone', 'pax', 'status', 'table', 'joined_at', 'seated_at', 'completed_at', 'wait_minutes', 'table_minutes']

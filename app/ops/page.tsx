@@ -22,7 +22,7 @@ type QItem = { id: string; queue_number: number; name: string | null; party_size
 type State = {
   settings: { allow_split_tables: boolean }
   tables: FloorTable[]
-  kpi: { seatedPax: number; maxCapacity: number; availableSeats: number; waitingGroups: number; waitingPax: number; servedPax: number; tablesCleaning: number; targetDuration: number }
+  kpi: { seatedPax: number; maxCapacity: number; availableSeats: number; waitingGroups: number; waitingPax: number; tablesCleaning: number; targetDuration: number }
   queue: QItem[]
   nextAction: { type: string; text: string }
 }
@@ -86,7 +86,6 @@ export default function FloorPage() {
         <div className="kpi"><span className="kl">In line</span><span className="kv">{k.waitingGroups}<small> grp</small> / {k.waitingPax}<small> pax</small></span></div>
         <div className="kpi"><span className="kl">Seated now</span><span className="kv">{k.seatedPax}<small> / {k.maxCapacity}</small></span></div>
         <div className={`kpi ${k.availableSeats <= 6 ? 'warnkpi' : ''}`}><span className="kl">Seats available</span><span className="kv">{Math.max(0, k.availableSeats)}</span></div>
-        <div className="kpi"><span className="kl">Served today</span><span className="kv">{k.servedPax}<small> pax</small></span></div>
         <div className="kpi"><span className="kl">Avg min/table</span>
           <span className="kv"><input className="avgin" type="number" min={1} value={avg}
             onChange={e => { avgTouched.current = true; setAvg(e.target.value) }}
@@ -186,7 +185,7 @@ export default function FloorPage() {
               <p className="dl"><span>Seated at</span><b>{new Date(detail.visit.seated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</b></p>
               <p className="dl"><span>Duration</span><b className={detail.visit.minutes > k.targetDuration ? 'over' : ''}>{detail.visit.minutes} min</b></p>
               {detail.visit.queue_number && <p className="dl"><span>Queue</span><b>{qfmt(detail.visit.queue_number)}</b></p>}
-              <button className="qbtn wfull" onClick={() => act('customer_left', { visit_id: detail.visit!.id }).then(ok => ok && setDetail(null))}>Customer left</button>
+              <button className="qbtn wfull" onClick={() => { if (confirm('Mark this table completed? The timer stops and the table is freed.')) act('customer_left', { visit_id: detail.visit!.id }).then(ok => ok && setDetail(null)) }}>Customer left (complete)</button>
             </>
           ) : (
             <>
