@@ -44,17 +44,23 @@ export async function proxy(request: NextRequest) {
     return response
   }
 
-  // Signed in: enforce per-tab access by URL.
+  // Signed in: enforce per-tab access by URL. `user` is guaranteed non-null by
+  // the `if (!user) return` above; the `!` is needed only because @supabase's
+  // getUser() return type doesn't narrow cleanly through the destructure.
   if (tabKey) {
+    // Capture the narrowed values into fresh consts — TS resets union narrowing
+    // for `tabKey`/`user` across the awaits below, so we pin them here first.
+    const key: string = tabKey
+    const userId = user!.id
     const { data: profile } = await supabase
       .from('profiles')
       .select('role, allowed_tabs')
-      .eq('id', user.id)
+      .eq('id', userId)
       .single()
     const role = profile?.role ?? 'member'
     const allowed = (profile?.allowed_tabs ?? []) as string[]
 
-    if (!canAccess(role, allowed, tabKey)) {
+    if (!canAccess(role, allowed, key)) {
       // Prefer bouncing them to their dashboard; if they can't even see that,
       // send them to /login with a clear message.
       if (canAccess(role, allowed, 'dashboard') && path !== '/') {

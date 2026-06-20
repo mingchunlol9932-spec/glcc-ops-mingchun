@@ -132,8 +132,10 @@ export async function todaysQueue(): Promise<QEntry[]> {
 export async function addQueueEntry(name: string | null, pax: number, phone: string | null, notes: string | null) {
   const today = await todaysQueue()
   const next = today.reduce((m, e) => Math.max(m, e.queue_number), 0) + 1
+  // queue_entries.name is NOT NULL — default anonymous walk-ins to "Walk-up".
   const { data, error } = await supabase.from('queue_entries').insert({
-    name, party_size: Math.max(1, Math.floor(pax)), phone, notes, status: 'waiting', queue_number: next,
+    name: name && name.trim() ? name.trim() : 'Walk-up',
+    party_size: Math.max(1, Math.floor(pax)), phone, notes, status: 'waiting', queue_number: next,
   }).select().single()
   if (error) throw new Error(error.message)
   return data
