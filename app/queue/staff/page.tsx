@@ -11,7 +11,20 @@ type FloorTable = {
   occupied: boolean; occupant: string | null
 }
 
-// PIN-protected staff console: call next, seat at a real table, free tables, QR.
+// Spatial position of each table on the map (left%, top%, width%, height%) —
+// laid out to mirror the real floor plan: A left, C top, B middle, D bottom,
+// E right, kitchen far right.
+const POS: Record<string, [number, number, number, number]> = {
+  A1: [1, 6, 11, 24], A2: [1, 70, 11, 24],
+  C1: [15, 4, 17, 22], C2: [34, 4, 17, 22],
+  B1: [15, 38, 13, 24], B3: [30, 38, 20, 24], B2: [52, 38, 13, 24],
+  D1: [14, 72, 12, 22], D2: [28, 72, 12, 22], D3: [42, 72, 12, 22], D4: [56, 72, 12, 22],
+  E1: [67, 8, 14, 26], E2: [67, 44, 14, 26],
+}
+const ZCOLOR: Record<string, string> = {
+  A: '#22c55e', B: '#38bdf8', C: '#a855f7', D: '#f87171', E: '#f59e0b',
+}
+
 export default function StaffQueue() {
   const [pin, setPin] = useState('')
   const [authed, setAuthed] = useState(false)
@@ -70,11 +83,18 @@ export default function StaffQueue() {
     load(pin)
   }, [pin, load])
 
-  // Free tables that fit a party — suggested first; fall back to all free if none fit.
-  function tablesForParty(party: number): FloorTable[] {
-    const free = floor.filter(t => !t.occupied)
-    const fits = free.filter(t => t.seats >= party)
-    return fits.length ? fits : free
+  const seatingEntry = active.find(e => e.id === seating) || null
+
+  function clickTable(t: FloorTable) {
+    if (seating) {
+      if (t.occupied) return            // can't seat on an occupied table
+      act('arrive', seating, { table_id: t.id })
+      setSeating(null)
+    } else if (t.occupied) {
+      if (confirm(`Free ${t.label}${t.occupant ? ` (${t.occupant})` : ''}?`)) {
+        act('free_table', undefined, { table_id: t.id })
+      }
+    }
   }
 
   if (!authed) {
@@ -92,8 +112,6 @@ export default function StaffQueue() {
       </div>
     )
   }
-
-  const zones = Array.from(new Set(floor.map(t => t.zone)))
 
   return (
     <div className="qstaff">
@@ -118,7 +136,7 @@ export default function StaffQueue() {
       ) : (
         <ul className="qlist">
           {active.map(e => (
-            <li key={e.id} className={`qrow ${e.status}`}>
+            <li key={e.id} className={`qrow ${e.status}${seating === e.id ? ' seatingnow' : ''}`}>
               <div className="qrn">#{e.queue_number}</div>
               <div className="qinfo">
                 <b>{e.name}</b> · party {e.party_size}
@@ -126,58 +144,60 @@ export default function StaffQueue() {
               </div>
               <div className="qacts">
                 {e.status === 'waiting' && <button className="qbtn sm" onClick={() => act('call', e.id)}>Call</button>}
-                {e.status === 'called' && seating !== e.id && (
-                  <>
-                    <button className="qbtn sm" onClick={() => setSeating(e.id)}>Arrive</button>
-                    <button className="qbtn sm ghost" onClick={() => act('no_show', e.id)}>No-show</button>
-                  </>
+                {e.status === 'called' && (
+                  seating === e.id
+                    ? <button className="qbtn sm ghost" onClick={() => setSeating(null)}>Cancel</button>
+                    : <>
+                        <button className="qbtn sm" onClick={() => setSeating(e.id)}>Arrive</button>
+                        <button className="qbtn sm ghost" onClick={() => act('no_show', e.id)}>No-show</button>
+                      </>
                 )}
               </div>
-              {seating === e.id && (
-                <div className="qseat">
-                  <div className="qseat-h">
-                    Seat party of {e.party_size} at:
-                    <button className="qx" onClick={() => setSeating(null)}>✕</button>
-                  </div>
-                  {tablesForParty(e.party_size).length === 0
-                    ? <span className="qmeta">No free tables.</span>
-                    : (
-                      <div className="qtbtns">
-                        {tablesForParty(e.party_size).map(t => (
-                          <button key={t.id} className="qtbtn"
-                            onClick={() => { act('arrive', e.id, { table_id: t.id }); setSeating(null) }}>
-                            {t.label}<span>{t.seats}p</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                </div>
-              )}
             </li>
           ))}
         </ul>
       )}
 
-      {/* Floor — live table status grouped by zone */}
-      <h2 className="qtitle sm qfloor-h">Floor · {freeTables} free</h2>
-      <div className="qfloor">
-        {zones.map(z => (
-          <div key={z} className="qzone">
-            <div className="qzone-l">Zone {z}</div>
-            <div className="qtiles">
-              {floor.filter(t => t.zone === z).map(t => (
-                <div key={t.id} className={`qtile ${t.occupied ? 'occ' : 'free'}`}>
-                  <div className="qtile-top"><b>{t.label}</b><span>{t.seats}p</span></div>
-                  {t.occupied
-                    ? <button className="qfree" onClick={() => act('free_table', undefined, { table_id: t.id })}>
-                        <span className="qocc">{t.occupant}</span>Free
-                      </button>
-                    : <span className="qopenlbl">open</span>}
-                </div>
-              ))}
-            </div>
-          </div>
+      {/* Seating instruction banner */}
+      {seatingEntry && (
+        <div className="qseatbar">
+          <span>🪑 Seating <b>{seatingEntry.name}</b> · party {seatingEntry.party_size} — tap a glowing table</span>
+          <button onClick={() => setSeating(null)}>Cancel</button>
+        </div>
+      )}
+
+      {/* Visual floor map */}
+      <div className="qlegend">
+        <span className="qtitle sm">Floor · {freeTables} free</span>
+        {Object.entries(ZCOLOR).map(([z, c]) => (
+          <span key={z} className="qdot"><i style={{ background: c }} />{z}</span>
         ))}
+      </div>
+      <div className="qmap">
+        {floor.map(t => {
+          const p = POS[t.id]
+          if (!p) return null
+          const fits = !t.occupied && t.seats >= (seatingEntry?.party_size ?? 0)
+          const cls = t.occupied
+            ? `qmt occ${seating ? ' dim' : ''}`
+            : `qmt${seating ? (fits ? ' seatable' : ' seatfree') : ''}`
+          return (
+            <div key={t.id} className={cls}
+              style={{
+                left: `${p[0]}%`, top: `${p[1]}%`, width: `${p[2]}%`, height: `${p[3]}%`,
+                borderColor: t.occupied ? undefined : ZCOLOR[t.zone],
+              }}
+              onClick={() => clickTable(t)}>
+              <b>{t.label}</b>
+              {t.occupied
+                ? <span className="nm">{t.occupant}</span>
+                : <span className="s">{t.seats}p</span>}
+            </div>
+          )
+        })}
+        <div className="qkitchen" style={{ left: '83%', top: '4%', width: '15%', height: '90%' }}>
+          Kitchen / Counter
+        </div>
       </div>
 
       <div className="qqr">
