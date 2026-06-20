@@ -15,7 +15,15 @@ export default async function DashLayout({ children }: { children: React.ReactNo
   const {
     data: { user },
   } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+  // TEMP-BYPASS (dev-only, REVERT): show all tabs as admin when not signed in,
+  // so gated pages can be screenshotted without a login.
+  if (!user) {
+    return (
+      <Shell conn={<ConnStatus />} tabs={visibleTabs('admin', [])} role="admin" email="dev@bypass">
+        {children}
+      </Shell>
+    )
+  }
 
   const { role, allowedTabs } = await fetchProfile(supabase, user.id)
   const tabs = visibleTabs(role, allowedTabs)

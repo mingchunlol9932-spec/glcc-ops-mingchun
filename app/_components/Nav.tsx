@@ -5,8 +5,11 @@ import type { Tab } from '@/lib/tabs'
 
 // Tabs are role-filtered on the server (see app/(dash)/layout.tsx) and passed
 // in, so a member never even sees a link to a tab they can't open. The /queue
-// staff console is not role-gated (it has its own PIN), so it always shows.
-const EXTRA = [{ href: '/queue/staff', label: 'Queue' }]
+// staff console and the /ops floor system have their own PIN, so they always show.
+const EXTRA = [
+  { href: '/queue/staff', label: 'Queue' },
+  { href: '/ops', label: 'Ops' },
+]
 
 export default function Nav({ tabs, onNavigate }: { tabs: Tab[]; onNavigate?: () => void }) {
   const path = usePathname()
