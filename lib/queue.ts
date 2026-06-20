@@ -109,6 +109,11 @@ export async function freeTable(tableId: string): Promise<void> {
   await supabase.from('restaurant_tables').update({ occupied_by: null }).eq('id', tableId)
 }
 
+// Free every table seated to the same guest (releases a combined group at once).
+export async function freeTablesByEntry(entryId: string): Promise<void> {
+  await supabase.from('restaurant_tables').update({ occupied_by: null }).eq('occupied_by', entryId)
+}
+
 // Staff PIN check. Never throws; false when no PIN configured.
 export function checkPin(pin: string | null | undefined): boolean {
   const real = (process.env.QUEUE_STAFF_PIN ?? '').trim()

@@ -1,7 +1,7 @@
 import {
   todaysEntries, getAvgMinutes, setAvgMinutes, patchEntry, getEntry,
   groupsAhead, checkPin, ACTIVE,
-  listTables, getTable, occupyTable, freeTable,
+  listTables, getTable, occupyTable, freeTable, freeTablesByEntry,
 } from '@/lib/queue'
 
 export const dynamic = 'force-dynamic'
@@ -49,10 +49,12 @@ export async function POST(req: Request) {
     return Response.json({ ok: true, avg_minutes: min })
   }
 
-  // Free a table (release it back to the floor) — no entry needed.
+  // Free a table — releases the whole combined group it belongs to.
   if (action === 'free_table') {
     const tableId = String(body.table_id ?? '')
-    if (tableId) await freeTable(tableId)
+    const t = tableId ? await getTable(tableId) : null
+    if (t?.occupied_by) await freeTablesByEntry(t.occupied_by)
+    else if (tableId) await freeTable(tableId)
     return Response.json({ ok: true })
   }
 
@@ -63,12 +65,17 @@ export async function POST(req: Request) {
   if (action === 'call') {
     await patchEntry(id, { status: 'called', called_at: new Date().toISOString() })
   } else if (action === 'arrive') {
-    // Seat at a real table: mark it occupied and stamp the table label on the entry.
-    const tableId = String(body.table_id ?? '')
-    const table = tableId ? await getTable(tableId) : null
-    const label = table?.label ?? (String(body.table_number ?? '').trim().slice(0, 20) || null)
+    // Seat at one or more tables (combine). Mark each occupied; stamp combined label.
+    const ids: string[] = Array.isArray(body.table_ids)
+      ? body.table_ids.map((x: unknown) => String(x))
+      : (body.table_id ? [String(body.table_id)] : [])
+    const tables = []
+    for (const tid of ids) { const t = await getTable(tid); if (t) tables.push(t) }
+    const label = tables.length
+      ? tables.map(t => t.label).join('+')
+      : (String(body.table_number ?? '').trim().slice(0, 40) || null)
     await patchEntry(id, { status: 'arrived', table_number: label, seated_at: new Date().toISOString() })
-    if (table) await occupyTable(table.id, id)
+    for (const t of tables) await occupyTable(t.id, id)
   } else if (action === 'no_show') {
     await patchEntry(id, { status: 'no_show' })
   } else {

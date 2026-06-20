@@ -247,7 +247,10 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   font-size: 13px; color: var(--text);
 }
+.qseatbar > span { min-width: 0; }
+.qseatbtns { display: flex; gap: 8px; flex-shrink: 0; }
 .qseatbar button { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 5px 10px; font-size: 12px; cursor: pointer; }
+.qseatbar button.go { background: var(--amber); border-color: var(--amber); color: #1a1205; font-weight: 700; }
 .qrow.seatingnow { border-color: var(--amber); }
 
 /* Floor legend (zone colours match the floor-plan drawing) */
@@ -275,6 +278,8 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 .qmt.occ { background: rgba(245,158,11,0.16); border-color: var(--amber); cursor: pointer; }
 .qmt.seatable { cursor: pointer; box-shadow: 0 0 0 2px rgba(245,158,11,0.5); animation: qpulse 1.3s ease-in-out infinite; }
 .qmt.seatfree { cursor: pointer; }
+.qmt.picked { cursor: pointer; background: var(--amber); border-color: var(--amber); box-shadow: 0 0 0 2px rgba(245,158,11,0.45); }
+.qmt.picked b, .qmt.picked .s { color: #1a1205; }
 .qmt.dim { opacity: 0.32; }
 @keyframes qpulse { 0%,100% { box-shadow: 0 0 0 2px rgba(245,158,11,0.35); } 50% { box-shadow: 0 0 0 5px rgba(245,158,11,0.7); } }
 .qkitchen {

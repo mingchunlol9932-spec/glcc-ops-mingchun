@@ -40,6 +40,7 @@ export default function StaffQueue() {
   const [freeTables, setFreeTables] = useState(0)
   const [seated, setSeated] = useState(0)
   const [seating, setSeating] = useState<string | null>(null) // entry id being seated
+  const [picked, setPicked] = useState<string[]>([])           // table ids selected to combine
   const [avgInput, setAvgInput] = useState('')
   const [qr, setQr] = useState('')
   const [joinUrl, setJoinUrl] = useState('')
@@ -91,13 +92,20 @@ export default function StaffQueue() {
 
   const seatingEntry = active.find(e => e.id === seating) || null
 
+  function startSeating(entryId: string) { setSeating(entryId); setPicked([]) }
+  function cancelSeating() { setSeating(null); setPicked([]) }
+  function confirmSeat() {
+    if (!seating || picked.length === 0) return
+    act('arrive', seating, { table_ids: picked })
+    cancelSeating()
+  }
+
   function clickTable(t: FloorTable) {
     if (seating) {
       if (t.occupied) return            // can't seat on an occupied table
-      act('arrive', seating, { table_id: t.id })
-      setSeating(null)
+      setPicked(p => p.includes(t.id) ? p.filter(x => x !== t.id) : [...p, t.id]) // toggle (combine)
     } else if (t.occupied) {
-      if (confirm(`Free ${t.label}${t.occupant ? ` (${t.occupant})` : ''}?`)) {
+      if (confirm(`Free ${t.label}${t.occupant ? ` (${t.occupant})` : ''}? This frees the whole group.`)) {
         act('free_table', undefined, { table_id: t.id })
       }
     }
@@ -152,9 +160,9 @@ export default function StaffQueue() {
                 {e.status === 'waiting' && <button className="qbtn sm" onClick={() => act('call', e.id)}>Call</button>}
                 {e.status === 'called' && (
                   seating === e.id
-                    ? <button className="qbtn sm ghost" onClick={() => setSeating(null)}>Cancel</button>
+                    ? <button className="qbtn sm ghost" onClick={cancelSeating}>Cancel</button>
                     : <>
-                        <button className="qbtn sm" onClick={() => setSeating(e.id)}>Arrive</button>
+                        <button className="qbtn sm" onClick={() => startSeating(e.id)}>Arrive</button>
                         <button className="qbtn sm ghost" onClick={() => act('no_show', e.id)}>No-show</button>
                       </>
                 )}
@@ -164,13 +172,25 @@ export default function StaffQueue() {
         </ul>
       )}
 
-      {/* Seating instruction banner */}
-      {seatingEntry && (
-        <div className="qseatbar">
-          <span>🪑 Seating <b>{seatingEntry.name}</b> · party {seatingEntry.party_size} — tap a glowing table</span>
-          <button onClick={() => setSeating(null)}>Cancel</button>
-        </div>
-      )}
+      {/* Seating instruction banner — pick one or more tables to combine, then Seat */}
+      {seatingEntry && (() => {
+        const pickedTables = floor.filter(t => picked.includes(t.id))
+        const totalSeats = pickedTables.reduce((s, t) => s + t.seats, 0)
+        const enough = totalSeats >= seatingEntry.party_size
+        return (
+          <div className="qseatbar">
+            <span>🪑 <b>{seatingEntry.name}</b> · party {seatingEntry.party_size} — {
+              pickedTables.length
+                ? <>seat at <b>{pickedTables.map(t => t.label).join('+')}</b> ({totalSeats} seat{totalSeats !== 1 ? 's' : ''}{enough ? ' ✓' : ''})</>
+                : 'tap one or more tables (combine for bigger parties)'
+            }</span>
+            <div className="qseatbtns">
+              {pickedTables.length > 0 && <button className="go" onClick={confirmSeat}>Seat</button>}
+              <button onClick={cancelSeating}>Cancel</button>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Visual floor map */}
       <div className="qlegend">
@@ -183,10 +203,11 @@ export default function StaffQueue() {
         {floor.map(t => {
           const p = POS[t.id]
           if (!p) return null
+          const isPicked = picked.includes(t.id)
           const fits = !t.occupied && t.seats >= (seatingEntry?.party_size ?? 0)
           const cls = t.occupied
             ? `qmt occ${seating ? ' dim' : ''}`
-            : `qmt${seating ? (fits ? ' seatable' : ' seatfree') : ''}`
+            : `qmt${seating ? (isPicked ? ' picked' : (fits ? ' seatable' : ' seatfree')) : ''}`
           return (
             <div key={t.id} className={cls}
               style={{
