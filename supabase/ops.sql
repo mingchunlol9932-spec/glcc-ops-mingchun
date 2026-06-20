@@ -11,12 +11,12 @@ alter table restaurant_tables add column if not exists active_visit_id  uuid;
 -- 2) Per-table capacities for Gepuklah (physical seats per table).
 update restaurant_tables t set seats = v.cap
 from (values
-  ('A1',4),('A2',4),
-  ('B1',6),('B2',6),('B3',8),
+  ('A1',2),('A2',2),
+  ('B1',4),('B2',4),('B3',8),
   ('C1',2),('C2',2),('C3',2),('C4',2),('C5',2),('C6',2),
   ('D1',2),('D2',2),('D3',2),('D4',2),('D5',2),('D6',2),('D7',2),('D8',2),
-  ('E1',6),('E2',6)
-) as v(id,cap)
+  ('E1',4),('E2',4)
+) as v(id,cap)  -- total = 56 seats
 where t.id = v.id;
 
 -- Fresh start for the ops model (clears any legacy occupancy from the old queue page).
