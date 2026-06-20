@@ -34,9 +34,9 @@ export default async function Money() {
           <tbody>
             {rows.map(r => (
               <tr key={r.id}>
-                <td>{r.title}</td>
-                <td><span className={`pill ${r.status}`}>{r.status}</span></td>
-                <td>{rm(r.amount)}</td>
+                <td data-label="Title">{r.title}</td>
+                <td data-label="Status"><span className={`pill ${r.status}`}>{r.status}</span></td>
+                <td data-label="Amount">{rm(r.amount)}</td>
               </tr>
             ))}
           </tbody>

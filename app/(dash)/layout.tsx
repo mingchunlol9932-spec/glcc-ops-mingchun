@@ -1,17 +1,28 @@
-import Nav from '@/app/_components/Nav'
+import { redirect } from 'next/navigation'
+import Shell from '@/app/_components/Shell'
 import ConnStatus from '@/app/_components/ConnStatus'
+import { createAuthServerClient, fetchProfile } from '@/lib/supabase/auth-server'
+import { visibleTabs } from '@/lib/tabs'
 
 // Layout for the business dashboard tabs. Route groups don't change URLs, so
 // every existing page keeps its path — they just gain this sidebar shell.
-export default function DashLayout({ children }: { children: React.ReactNode }) {
+//
+// This is also the auth gate: no session → redirect to /login. We load the
+// user's role + allowed tabs and hand only the VISIBLE tabs to the nav.
+// (middleware.ts independently blocks direct-URL access — defense in depth.)
+export default async function DashLayout({ children }: { children: React.ReactNode }) {
+  const supabase = await createAuthServerClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const { role, allowedTabs } = await fetchProfile(supabase, user.id)
+  const tabs = visibleTabs(role, allowedTabs)
+
   return (
-    <div className="app">
-      <aside className="side">
-        <div className="brand"><span className="logo" aria-hidden="true" /> Your AI HQ</div>
-        <Nav />
-        <p className="hint">Most tabs read one <code>records</code> table.</p>
-      </aside>
-      <main className="main"><ConnStatus />{children}</main>
-    </div>
+    <Shell conn={<ConnStatus />} tabs={tabs} role={role} email={user.email ?? ''}>
+      {children}
+    </Shell>
   )
 }

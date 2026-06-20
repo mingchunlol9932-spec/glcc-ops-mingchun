@@ -33,13 +33,13 @@ export default async function Projects() {
           <tbody>
             {rows.map(r => (
               <tr key={r.id}>
-                <td>{r.title}</td>
-                <td>{m(r, 'client')}</td>
-                <td><span className={`pill ${r.status}`}>{r.status}</span></td>
-                <td>{m(r, 'owner')}</td>
-                <td>{r.due_date ?? '—'}</td>
-                <td>{r.amount ? rm(r.amount) : '—'}</td>
-                <td>{r.meta?.pct != null ? `${r.meta.pct}%` : '—'}</td>
+                <td data-label="Project">{r.title}</td>
+                <td data-label="Client">{m(r, 'client')}</td>
+                <td data-label="Status"><span className={`pill ${r.status}`}>{r.status}</span></td>
+                <td data-label="Owner">{m(r, 'owner')}</td>
+                <td data-label="Deadline">{r.due_date ?? '—'}</td>
+                <td data-label="Budget">{r.amount ? rm(r.amount) : '—'}</td>
+                <td data-label="%">{r.meta?.pct != null ? `${r.meta.pct}%` : '—'}</td>
               </tr>
             ))}
           </tbody>

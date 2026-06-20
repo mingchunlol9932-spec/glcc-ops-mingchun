@@ -1,28 +1,20 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import type { Tab } from '@/lib/tabs'
 
-// Add a tab? Add one line here + a matching app/<name>/page.tsx. That's it.
-const TABS = [
-  { href: '/', label: 'Dashboard' },
-  { href: '/pipeline', label: 'Pipeline' },
-  { href: '/money', label: 'Money' },
-  { href: '/tasks', label: 'Tasks' },
-  { href: '/projects', label: 'Projects' },
-  { href: '/contacts', label: 'Contacts' },
-  { href: '/content', label: 'Content' },
-  { href: '/hr', label: 'HR' },
-  { href: '/timetable', label: 'Timetable' },
-  { href: '/agents', label: 'Agents' },
-  { href: '/queue/staff', label: 'Queue' },
-]
+// Tabs are role-filtered on the server (see app/(dash)/layout.tsx) and passed
+// in, so a member never even sees a link to a tab they can't open. The /queue
+// staff console is not role-gated (it has its own PIN), so it always shows.
+const EXTRA = [{ href: '/queue/staff', label: 'Queue' }]
 
-export default function Nav() {
+export default function Nav({ tabs, onNavigate }: { tabs: Tab[]; onNavigate?: () => void }) {
   const path = usePathname()
+  const items = [...tabs.map(t => ({ href: t.href, label: t.label })), ...EXTRA]
   return (
     <nav className="nav">
-      {TABS.map(t => (
-        <Link key={t.href} href={t.href} className={path === t.href ? 'active' : ''}>
+      {items.map(t => (
+        <Link key={t.href} href={t.href} className={path === t.href ? 'active' : ''} onClick={onNavigate}>
           {t.label}
         </Link>
       ))}
