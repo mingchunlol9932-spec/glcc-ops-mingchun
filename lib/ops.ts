@@ -91,6 +91,8 @@ export async function seatGroup(opts: {
 
   const tables = await listTables()
   const chosen = tables.filter(t => opts.tableIds.includes(t.id))
+  // Friendly pre-checks (the authoritative availability check is the atomic
+  // claim below — these just give a nicer message in the common case).
   if (!chosen.length) throw new Error('Pick at least one table.')
   if (chosen.some(t => t.status !== 'available')) throw new Error('One of those tables is no longer available.')
   if (chosen.length > 1 && !settings.allow_split_tables) throw new Error('Splitting across tables is turned off in Settings.')
@@ -101,8 +103,26 @@ export async function seatGroup(opts: {
     pax_count: pax, customer_name: opts.customerName ?? null, queue_entry_id: opts.queueEntryId ?? null, status: 'seated',
   }).select().single()
   if (error) throw new Error(error.message)
-  await supabase.from('visit_tables').insert(chosen.map(t => ({ visit_id: v.id, table_id: t.id })))
-  await setTableStatus(chosen.map(t => t.id), 'seated', v.id)
+
+  // ATOMIC claim: only flips tables that are STILL 'available'. Postgres row
+  // locks guarantee two concurrent seatings can't both win the same table —
+  // the loser updates 0 of that row, so claimed.length comes up short and we
+  // roll back. This prevents double-booking a table under concurrency.
+  const { data: claimed, error: claimErr } = await supabase.from('restaurant_tables')
+    .update({ status: 'seated', status_since: new Date().toISOString(), active_visit_id: v.id })
+    .in('id', opts.tableIds)
+    .eq('status', 'available')
+    .select('id')
+  if (claimErr || !claimed || claimed.length !== chosen.length) {
+    // Someone grabbed one of these tables first — release what we claimed and undo the visit.
+    await supabase.from('restaurant_tables')
+      .update({ status: 'available', active_visit_id: null })
+      .eq('active_visit_id', v.id)
+    await supabase.from('visits').delete().eq('id', v.id)
+    throw new Error('One of those tables was just taken — please pick another.')
+  }
+
+  await supabase.from('visit_tables').insert(claimed.map(t => ({ visit_id: v.id, table_id: t.id })))
   if (opts.queueEntryId)
     await supabase.from('queue_entries').update({ status: 'seated', seated_at: new Date().toISOString() }).eq('id', opts.queueEntryId)
   return v as Visit
