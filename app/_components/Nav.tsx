@@ -12,6 +12,7 @@ const TABS = [
   { href: '/contacts', label: 'Contacts' },
   { href: '/content', label: 'Content' },
   { href: '/agents', label: 'Agents' },
+  { href: '/queue/staff', label: 'Queue' },
 ]
 
 export default function Nav() {

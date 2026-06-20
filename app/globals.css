@@ -122,3 +122,134 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 .btn { background: var(--amber); color: #1a1205; border: none; border-radius: 9px; padding: 9px 16px; font-size: 14px; font-weight: 600; cursor: pointer; }
 .btn:disabled { opacity: 0.6; cursor: default; }
 .brief { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin: 14px 0 0; font-size: 13px; line-height: 1.6; color: var(--text); font-family: inherit; }
+
+/* ---- Mobile (phones / small tablets) ----
+   All 8 tabs share these classes, so one breakpoint makes the whole app responsive. */
+@media (max-width: 720px) {
+  /* Sidebar becomes a sticky horizontal top bar with scrollable tabs. */
+  .app { flex-direction: column; }
+  .side {
+    width: 100%; flex-direction: row; align-items: center; gap: 10px;
+    padding: 10px 14px; border-right: none; border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 20; background: var(--surface);
+  }
+  .brand { margin-bottom: 0; flex-shrink: 0; font-size: 14px; }
+  .nav { flex-direction: row; gap: 4px; flex: 1; overflow-x: auto; padding-bottom: 2px; -webkit-overflow-scrolling: touch; }
+  .nav::-webkit-scrollbar { display: none; }
+  .nav { scrollbar-width: none; }
+  .nav a { white-space: nowrap; padding: 7px 11px; }
+  .hint { display: none; } /* dev note — hide to save space on phones */
+
+  .main { padding: 18px 15px; }
+  .ph { font-size: 20px; }
+  .cap { margin-bottom: 18px; }
+
+  /* Two stat cards per row instead of squeezing four. */
+  .grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .stat { padding: 13px; }
+  .stat .v { font-size: 22px; }
+
+  /* Wide tables scroll sideways instead of overflowing the page. */
+  .tbl { display: block; width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tbl thead, .tbl tbody { display: table; width: 100%; min-width: 480px; }
+  .tbl th, .tbl td { padding: 10px 12px; }
+
+  /* Kanban columns stack vertically. */
+  .cols { flex-direction: column; gap: 16px; }
+
+  .office { height: 300px; }
+  .agent-card { max-width: 100%; }
+}
+
+/* ============================================================
+   Queue / virtual waitlist — customer + staff (mobile-first)
+   ============================================================ */
+.qwrap {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  padding: 22px 16px; background: var(--bg);
+}
+.qwrap.hot { background: radial-gradient(circle at 50% 30%, rgba(245,158,11,0.18), var(--bg) 70%); }
+.qcard {
+  width: 100%; max-width: 420px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 16px; padding: 26px 22px;
+}
+.qcard.center { text-align: center; }
+.qtitle { font-size: 22px; font-weight: 700; margin: 0 0 6px; color: var(--text); }
+.qtitle.sm { font-size: 16px; }
+.qsub { color: var(--muted); font-size: 14px; line-height: 1.5; margin: 0 0 18px; }
+.qopt { color: var(--dim); font-weight: 400; }
+
+.qform { display: flex; flex-direction: column; gap: 14px; }
+.qform label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+.qform input {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 13px; font-size: 16px; color: var(--text); width: 100%;
+}
+.qform input:focus { outline: none; border-color: var(--amber); }
+.qerr { color: #ff9b9b; font-size: 13px; margin: 0; }
+
+.qbtn {
+  background: var(--amber); color: #1a1205; border: none; border-radius: 11px;
+  padding: 13px 18px; font-size: 16px; font-weight: 700; cursor: pointer; width: 100%;
+}
+.qbtn:disabled { opacity: 0.6; cursor: default; }
+.qbtn.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); margin-top: 14px; }
+.qbtn.sm { width: auto; padding: 8px 14px; font-size: 14px; border-radius: 9px; }
+
+/* Customer status */
+.qnum { font-size: 56px; font-weight: 800; margin: 4px 0 18px; color: var(--amber); letter-spacing: -1px; }
+.qbig { font-size: 28px; font-weight: 800; margin: 6px 0 8px; color: var(--text); }
+.qbell { font-size: 64px; line-height: 1; margin-bottom: 8px; animation: qring 0.7s ease-in-out infinite; }
+@keyframes qring { 0%,100% { transform: rotate(-12deg); } 50% { transform: rotate(12deg); } }
+.qstats { display: flex; gap: 10px; margin: 4px 0 18px; }
+.qstats > div {
+  flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 12px;
+  padding: 14px 8px; display: flex; flex-direction: column; gap: 3px;
+}
+.qstats b { font-size: 24px; color: var(--text); }
+.qstats span { font-size: 11px; color: var(--dim); }
+
+/* Staff console */
+.qstaff { max-width: 640px; margin: 0 auto; padding: 20px 16px 60px; }
+.qshead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.qlink { color: var(--muted); font-size: 13px; text-decoration: none; }
+.qlink:hover { color: var(--text); }
+.qpin {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px; font-size: 22px; text-align: center; letter-spacing: 6px;
+  color: var(--text); width: 100%; margin-bottom: 12px;
+}
+.qsbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 14px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 12px 14px; font-size: 13px; color: var(--muted); margin-bottom: 16px;
+}
+.qsbar b { color: var(--text); font-size: 16px; }
+.qavg { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.qavg input { width: 64px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; color: var(--text); font-size: 14px; }
+.qavg button { background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 13px; cursor: pointer; }
+
+.qlist { list-style: none; margin: 0 0 22px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.qrow {
+  display: flex; align-items: center; gap: 12px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px;
+}
+.qrow.called { border-color: rgba(245,158,11,0.55); background: rgba(245,158,11,0.07); }
+.qrn { font-size: 18px; font-weight: 700; color: var(--amber); min-width: 42px; }
+.qinfo { flex: 1; min-width: 0; font-size: 14px; color: var(--text); display: flex; flex-direction: column; gap: 2px; }
+.qmeta { font-size: 12px; color: var(--dim); }
+.qacts { display: flex; gap: 8px; flex-shrink: 0; }
+
+.qqr {
+  text-align: center; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 20px; max-width: 320px; margin: 0 auto;
+}
+.qqr img { background: #fff; border-radius: 10px; padding: 8px; }
+.qurl { font-size: 12px; color: var(--dim); word-break: break-all; margin: 12px 0; }
+
+@media print {
+  .qstaff > *:not(.qqr) { display: none !important; }
+  .qqr { border: none; max-width: 100%; }
+  body { background: #fff; }
+}
+
