@@ -6,14 +6,21 @@ type Entry = {
   id: string; name: string; party_size: number; phone: string | null
   status: 'waiting' | 'called'; queue_number: number; wait_minutes: number
 }
+type FloorTable = {
+  id: string; zone: string; label: string; seats: number
+  occupied: boolean; occupant: string | null
+}
 
-// PIN-protected staff console: call next, mark arrive/no-show, set wait, show QR.
+// PIN-protected staff console: call next, seat at a real table, free tables, QR.
 export default function StaffQueue() {
   const [pin, setPin] = useState('')
   const [authed, setAuthed] = useState(false)
   const [err, setErr] = useState('')
   const [active, setActive] = useState<Entry[]>([])
+  const [floor, setFloor] = useState<FloorTable[]>([])
+  const [freeTables, setFreeTables] = useState(0)
   const [seated, setSeated] = useState(0)
+  const [seating, setSeating] = useState<string | null>(null) // entry id being seated
   const [avgInput, setAvgInput] = useState('')
   const [qr, setQr] = useState('')
   const [joinUrl, setJoinUrl] = useState('')
@@ -25,6 +32,8 @@ export default function StaffQueue() {
     const j = await res.json().catch(() => ({}))
     if (!j.ok) return false
     setActive(j.active ?? [])
+    setFloor(j.floor ?? [])
+    setFreeTables(j.free_tables ?? 0)
     setSeated(j.seated_today ?? 0)
     if (!avgTouched.current) setAvgInput(String(j.avg_minutes))
     setAuthed(true); setErr('')
@@ -36,20 +45,17 @@ export default function StaffQueue() {
     if (ok) localStorage.setItem('queue_pin', p)
   }, [load])
 
-  // Restore a saved PIN on first load.
   useEffect(() => {
     const saved = localStorage.getItem('queue_pin')
     if (saved) { setPin(saved); unlock(saved) }
   }, [unlock])
 
-  // Build the customer QR from the real origin (works on any domain).
   useEffect(() => {
     const url = `${window.location.origin}/queue`
     setJoinUrl(url)
     QRCode.toDataURL(url, { width: 240, margin: 1 }).then(setQr).catch(() => {})
   }, [])
 
-  // Poll the live list while authed.
   useEffect(() => {
     if (!authed) return
     const t = setInterval(() => load(pin), 4000)
@@ -64,10 +70,11 @@ export default function StaffQueue() {
     load(pin)
   }, [pin, load])
 
-  function arrive(id: string) {
-    const table = prompt('Table number?')
-    if (table === null) return
-    act('arrive', id, { table_number: table })
+  // Free tables that fit a party — suggested first; fall back to all free if none fit.
+  function tablesForParty(party: number): FloorTable[] {
+    const free = floor.filter(t => !t.occupied)
+    const fits = free.filter(t => t.seats >= party)
+    return fits.length ? fits : free
   }
 
   if (!authed) {
@@ -86,6 +93,8 @@ export default function StaffQueue() {
     )
   }
 
+  const zones = Array.from(new Set(floor.map(t => t.zone)))
+
   return (
     <div className="qstaff">
       <header className="qshead">
@@ -95,6 +104,7 @@ export default function StaffQueue() {
 
       <div className="qsbar">
         <span><b>{active.length}</b> in line</span>
+        <span><b>{freeTables}</b> tables free</span>
         <span><b>{seated}</b> seated today</span>
         <label className="qavg">avg min/table
           <input type="number" min="1" value={avgInput}
@@ -116,17 +126,59 @@ export default function StaffQueue() {
               </div>
               <div className="qacts">
                 {e.status === 'waiting' && <button className="qbtn sm" onClick={() => act('call', e.id)}>Call</button>}
-                {e.status === 'called' && (
+                {e.status === 'called' && seating !== e.id && (
                   <>
-                    <button className="qbtn sm" onClick={() => arrive(e.id)}>Arrive</button>
+                    <button className="qbtn sm" onClick={() => setSeating(e.id)}>Arrive</button>
                     <button className="qbtn sm ghost" onClick={() => act('no_show', e.id)}>No-show</button>
                   </>
                 )}
               </div>
+              {seating === e.id && (
+                <div className="qseat">
+                  <div className="qseat-h">
+                    Seat party of {e.party_size} at:
+                    <button className="qx" onClick={() => setSeating(null)}>✕</button>
+                  </div>
+                  {tablesForParty(e.party_size).length === 0
+                    ? <span className="qmeta">No free tables.</span>
+                    : (
+                      <div className="qtbtns">
+                        {tablesForParty(e.party_size).map(t => (
+                          <button key={t.id} className="qtbtn"
+                            onClick={() => { act('arrive', e.id, { table_id: t.id }); setSeating(null) }}>
+                            {t.label}<span>{t.seats}p</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                </div>
+              )}
             </li>
           ))}
         </ul>
       )}
+
+      {/* Floor — live table status grouped by zone */}
+      <h2 className="qtitle sm qfloor-h">Floor · {freeTables} free</h2>
+      <div className="qfloor">
+        {zones.map(z => (
+          <div key={z} className="qzone">
+            <div className="qzone-l">Zone {z}</div>
+            <div className="qtiles">
+              {floor.filter(t => t.zone === z).map(t => (
+                <div key={t.id} className={`qtile ${t.occupied ? 'occ' : 'free'}`}>
+                  <div className="qtile-top"><b>{t.label}</b><span>{t.seats}p</span></div>
+                  {t.occupied
+                    ? <button className="qfree" onClick={() => act('free_table', undefined, { table_id: t.id })}>
+                        <span className="qocc">{t.occupant}</span>Free
+                      </button>
+                    : <span className="qopenlbl">open</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
 
       <div className="qqr">
         <h2 className="qtitle sm">Customer QR</h2>

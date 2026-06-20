@@ -77,6 +77,38 @@ export function groupsAhead(entry: QueueEntry, all: QueueEntry[]): number {
   return all.filter(e => ACTIVE.includes(e.status) && e.queue_number < entry.queue_number).length
 }
 
+// ---- Restaurant tables (floor layout) ----
+
+export type RTable = {
+  id: string
+  zone: string
+  label: string
+  seats: number
+  sort: number
+  occupied_by: string | null // queue_entries.id, or null when free
+}
+
+export async function listTables(): Promise<RTable[]> {
+  if (!supabaseConfigured) return []
+  const { data, error } = await supabase.from('restaurant_tables').select('*').order('sort', { ascending: true })
+  if (error) { console.warn('[queue] tables read failed:', error.message); return [] }
+  return (data ?? []) as RTable[]
+}
+
+export async function getTable(id: string): Promise<RTable | null> {
+  if (!supabaseConfigured || !id) return null
+  const { data } = await supabase.from('restaurant_tables').select('*').eq('id', id).maybeSingle()
+  return (data ?? null) as RTable | null
+}
+
+export async function occupyTable(tableId: string, entryId: string): Promise<void> {
+  await supabase.from('restaurant_tables').update({ occupied_by: entryId }).eq('id', tableId)
+}
+
+export async function freeTable(tableId: string): Promise<void> {
+  await supabase.from('restaurant_tables').update({ occupied_by: null }).eq('id', tableId)
+}
+
 // Staff PIN check. Never throws; false when no PIN configured.
 export function checkPin(pin: string | null | undefined): boolean {
   const real = (process.env.QUEUE_STAFF_PIN ?? '').trim()

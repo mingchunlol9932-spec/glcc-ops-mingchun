@@ -1,6 +1,7 @@
 import {
   todaysEntries, getAvgMinutes, setAvgMinutes, patchEntry, getEntry,
   groupsAhead, checkPin, ACTIVE,
+  listTables, getTable, occupyTable, freeTable,
 } from '@/lib/queue'
 
 export const dynamic = 'force-dynamic'
@@ -22,7 +23,18 @@ export async function GET(req: Request) {
     .filter(e => ACTIVE.includes(e.status))
     .map(e => ({ ...e, wait_minutes: e.status === 'waiting' ? groupsAhead(e, all) * avg : 0 }))
   const seatedToday = all.filter(e => e.status === 'arrived').length
-  return Response.json({ ok: true, avg_minutes: avg, active, seated_today: seatedToday })
+
+  // Floor: each table plus who's seated there (name resolved from today's entries).
+  const tables = await listTables()
+  const nameById = new Map(all.map(e => [e.id, e.name]))
+  const floor = tables.map(t => ({
+    id: t.id, zone: t.zone, label: t.label, seats: t.seats,
+    occupied: !!t.occupied_by,
+    occupant: t.occupied_by ? (nameById.get(t.occupied_by) ?? 'Seated') : null,
+  }))
+  const freeTables = floor.filter(t => !t.occupied).length
+
+  return Response.json({ ok: true, avg_minutes: avg, active, seated_today: seatedToday, floor, free_tables: freeTables })
 }
 
 // Staff actions: call | arrive | no_show | set_avg.
@@ -37,6 +49,13 @@ export async function POST(req: Request) {
     return Response.json({ ok: true, avg_minutes: min })
   }
 
+  // Free a table (release it back to the floor) — no entry needed.
+  if (action === 'free_table') {
+    const tableId = String(body.table_id ?? '')
+    if (tableId) await freeTable(tableId)
+    return Response.json({ ok: true })
+  }
+
   const id = String(body.id ?? '')
   const e = await getEntry(id)
   if (!e) return Response.json({ ok: false, error: 'not_found' }, { status: 404 })
@@ -44,8 +63,12 @@ export async function POST(req: Request) {
   if (action === 'call') {
     await patchEntry(id, { status: 'called', called_at: new Date().toISOString() })
   } else if (action === 'arrive') {
-    const table = String(body.table_number ?? '').trim().slice(0, 20) || null
-    await patchEntry(id, { status: 'arrived', table_number: table, seated_at: new Date().toISOString() })
+    // Seat at a real table: mark it occupied and stamp the table label on the entry.
+    const tableId = String(body.table_id ?? '')
+    const table = tableId ? await getTable(tableId) : null
+    const label = table?.label ?? (String(body.table_number ?? '').trim().slice(0, 20) || null)
+    await patchEntry(id, { status: 'arrived', table_number: label, seated_at: new Date().toISOString() })
+    if (table) await occupyTable(table.id, id)
   } else if (action === 'no_show') {
     await patchEntry(id, { status: 'no_show' })
   } else {
