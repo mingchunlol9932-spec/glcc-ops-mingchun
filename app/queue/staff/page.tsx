@@ -16,9 +16,15 @@ type FloorTable = {
 // E right, kitchen far right.
 const POS: Record<string, [number, number, number, number]> = {
   A1: [1, 6, 11, 24], A2: [1, 70, 11, 24],
-  C1: [15, 4, 17, 22], C2: [34, 4, 17, 22],
+  // Zone C — 6 square 2-tops along the top
+  C1: [15, 4, 7.5, 21], C2: [23.3, 4, 7.5, 21], C3: [31.6, 4, 7.5, 21],
+  C4: [39.9, 4, 7.5, 21], C5: [48.2, 4, 7.5, 21], C6: [56.5, 4, 7.5, 21],
+  // Zone B — round 4-tops + long communal 8-top
   B1: [15, 38, 13, 24], B3: [30, 38, 20, 24], B2: [52, 38, 13, 24],
-  D1: [14, 72, 12, 22], D2: [28, 72, 12, 22], D3: [42, 72, 12, 22], D4: [56, 72, 12, 22],
+  // Zone D — 8 square 2-tops along the bottom
+  D1: [14, 72, 6.4, 21], D2: [21.1, 72, 6.4, 21], D3: [28.2, 72, 6.4, 21], D4: [35.3, 72, 6.4, 21],
+  D5: [42.4, 72, 6.4, 21], D6: [49.5, 72, 6.4, 21], D7: [56.6, 72, 6.4, 21], D8: [63.7, 72, 6.4, 21],
+  // Zone E — round 4-tops
   E1: [67, 8, 14, 26], E2: [67, 44, 14, 26],
 }
 const ZCOLOR: Record<string, string> = {

@@ -269,9 +269,9 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
   padding: 2px; overflow: hidden; text-align: center; transition: box-shadow .15s, opacity .15s;
 }
-.qmt b { font-size: 13px; color: var(--text); line-height: 1.05; }
-.qmt .s { font-size: 10px; color: var(--dim); }
-.qmt .nm { font-size: 10px; color: var(--amber); max-width: 94%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qmt b { font-size: 12px; color: var(--text); line-height: 1.05; }
+.qmt .s { font-size: 9px; color: var(--dim); }
+.qmt .nm { font-size: 9px; color: var(--amber); max-width: 96%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qmt.occ { background: rgba(245,158,11,0.16); border-color: var(--amber); cursor: pointer; }
 .qmt.seatable { cursor: pointer; box-shadow: 0 0 0 2px rgba(245,158,11,0.5); animation: qpulse 1.3s ease-in-out infinite; }
 .qmt.seatfree { cursor: pointer; }
