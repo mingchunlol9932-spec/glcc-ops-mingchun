@@ -26,6 +26,7 @@ const TABS = [
   { href: '/ops/feedback', label: 'Feedback' },
   { href: '/ops/settings', label: 'Settings' },
   { href: '/dash', label: 'Business ↗' },
+  { href: '/hr', label: 'Staff ↗' },
 ]
 
 function OpsNav() {
