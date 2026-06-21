@@ -32,7 +32,9 @@ export default function HRView({ employees }: { employees: Employee[] }) {
   const partTime = filtered.filter(e => e.employment_type === 'part_time').length
   const weeklyHours = onTeam.reduce((s, e) => s + Number(e.weekly_hours || 0), 0)
   const monthlyCost = onTeam.reduce(
-    (s, e) => s + Number(e.hourly_rate || 0) * Number(e.weekly_hours || 0) * WEEKS_PER_MONTH,
+    (s, e) => s + (e.pay_type === 'monthly'
+      ? Number(e.monthly_salary || 0)
+      : Number(e.hourly_rate || 0) * Number(e.weekly_hours || 0) * WEEKS_PER_MONTH),
     0,
   )
 
@@ -81,7 +83,9 @@ export default function HRView({ employees }: { employees: Employee[] }) {
                 <td data-label="Type"><span className={`pill ${e.employment_type}`}>{labelize(e.employment_type)}</span></td>
                 <td data-label="Status"><span className={`pill ${e.status}`}>{labelize(e.status)}</span></td>
                 <td data-label="Hours/wk">{e.weekly_hours ? `${e.weekly_hours} h` : '—'}</td>
-                <td data-label="Rate">{e.hourly_rate ? `${rm(e.hourly_rate)}/h` : '—'}</td>
+                <td data-label="Rate">{e.pay_type === 'monthly'
+                  ? (e.monthly_salary ? `${rm(e.monthly_salary)}/mo` : '—')
+                  : (e.hourly_rate ? `${rm(e.hourly_rate)}/h` : '—')}</td>
               </tr>
             ))}
           </tbody>

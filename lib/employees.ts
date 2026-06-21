@@ -10,7 +10,9 @@ export type Employee = {
   department: string | null
   employment_type: string   // 'full_time' | 'part_time'
   status: string            // 'active' | 'on_leave' | 'probation' | 'left'
-  hourly_rate: number       // RM per hour
+  hourly_rate: number       // RM per hour (used when pay_type = 'hourly')
+  pay_type?: string         // 'hourly' | 'monthly' (defaults to hourly)
+  monthly_salary?: number   // RM per month (used when pay_type = 'monthly')
   weekly_hours: number      // contracted hours per week
   start_date: string | null
   email: string | null
@@ -23,11 +25,11 @@ export type Employee = {
 // empty — real rows take over automatically once supabase/employees.sql is run.
 // Safe to delete this block (and the two fallbacks below) after seeding.
 const DUMMY_EMPLOYEES: Employee[] = [
-  { id: 1, name: 'Ming',         role: 'CEO / Founder',                department: 'Management',              employment_type: 'full_time', status: 'active', hourly_rate: 60, weekly_hours: 50, start_date: '2023-01-01', email: 'ming@gepuklah.com',  work_days: ['Mon','Tue','Wed','Thu','Fri','Sat'], created_at: '2023-01-01' },
-  { id: 2, name: 'Mel Lee',      role: 'Head of Staff',                department: 'Management',              employment_type: 'full_time', status: 'active', hourly_rate: 35, weekly_hours: 45, start_date: '2023-06-01', email: 'mel@gepuklah.com',   work_days: ['Mon','Tue','Wed','Thu','Fri'], created_at: '2023-06-01' },
-  { id: 3, name: 'Amir',         role: 'Head Chef + Supplier Liaison', department: 'Kitchen',                 employment_type: 'full_time', status: 'active', hourly_rate: 30, weekly_hours: 48, start_date: '2023-03-01', email: 'amir@gepuklah.com',  work_days: ['Tue','Wed','Thu','Fri','Sat','Sun'], created_at: '2023-03-01' },
-  { id: 4, name: 'Kelly',        role: 'Accountant + Purchasing',      department: 'Finance / Admin',         employment_type: 'full_time', status: 'active', hourly_rate: 28, weekly_hours: 40, start_date: '2024-02-01', email: 'kelly@gepuklah.com', work_days: ['Mon','Tue','Wed','Thu','Fri'], created_at: '2024-02-01' },
-  { id: 5, name: 'Service Crew', role: 'Full-Time Service Crew',       department: 'Operations / Restaurant', employment_type: 'full_time', status: 'active', hourly_rate: 12, weekly_hours: 45, start_date: '2024-01-01', email: 'crew@gepuklah.com',  work_days: ['Wed','Thu','Fri','Sat','Sun'], created_at: '2024-01-01' },
+  { id: 1, name: 'Ming',         role: 'CEO / Founder',                department: 'Management',              employment_type: 'full_time', status: 'active', pay_type: 'monthly', monthly_salary: 0, hourly_rate: 0,  weekly_hours: 50, start_date: '2023-01-01', email: 'ming@gepuklah.com',  work_days: ['Mon','Tue','Wed','Thu','Fri','Sat'], created_at: '2023-01-01' },
+  { id: 2, name: 'Mel Lee',      role: 'Head of Staff',                department: 'Management',              employment_type: 'full_time', status: 'active', pay_type: 'monthly', monthly_salary: 0, hourly_rate: 0,  weekly_hours: 45, start_date: '2023-06-01', email: 'mel@gepuklah.com',   work_days: ['Mon','Tue','Wed','Thu','Fri'], created_at: '2023-06-01' },
+  { id: 3, name: 'Amir',         role: 'Head Chef + Supplier Liaison', department: 'Kitchen',                 employment_type: 'full_time', status: 'active', pay_type: 'monthly', monthly_salary: 0, hourly_rate: 0,  weekly_hours: 48, start_date: '2023-03-01', email: 'amir@gepuklah.com',  work_days: ['Tue','Wed','Thu','Fri','Sat','Sun'], created_at: '2023-03-01' },
+  { id: 4, name: 'Kelly',        role: 'Accountant + Purchasing',      department: 'Finance / Admin',         employment_type: 'full_time', status: 'active', pay_type: 'monthly', monthly_salary: 0, hourly_rate: 0,  weekly_hours: 40, start_date: '2024-02-01', email: 'kelly@gepuklah.com', work_days: ['Mon','Tue','Wed','Thu','Fri'], created_at: '2024-02-01' },
+  { id: 5, name: 'Service Crew', role: 'Full-Time Service Crew',       department: 'Operations / Restaurant', employment_type: 'full_time', status: 'active', pay_type: 'hourly',  monthly_salary: 0, hourly_rate: 10, weekly_hours: 45, start_date: '2024-01-01', email: 'crew@gepuklah.com',  work_days: ['Wed','Thu','Fri','Sat','Sun'], created_at: '2024-01-01' },
 ]
 
 export async function getEmployees(): Promise<Employee[]> {
