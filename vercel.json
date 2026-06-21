@@ -2,6 +2,6 @@
   "crons": [
     { "path": "/api/digest", "schedule": "0 1 * * *" },
     { "path": "/api/jarvis-oyen", "schedule": "0 9 * * *" },
-    { "path": "/api/ops-recap", "schedule": "0 0 * * *" }
+    { "path": "/api/ops-recap", "schedule": "0 2 * * *" }
   ]
 }

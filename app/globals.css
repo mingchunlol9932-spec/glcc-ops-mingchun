@@ -525,7 +525,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 .dl b { color: var(--text); }
 .dl b.over { color: #ff9b9b; }
 
-.floatbar { position: fixed; left: 16px; right: 16px; bottom: 16px; z-index: 50; max-width: 680px; margin: 0 auto; }
+.floatbar { position: fixed; top: auto; left: 16px; right: 16px; bottom: 16px; z-index: 50; max-width: 680px; margin: 0 auto; }
 .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #3a1d1d; border: 1px solid rgba(239,68,68,.5); color: #ffd2d2; padding: 10px 16px; border-radius: 10px; font-size: 14px; z-index: 70; }
 
 /* dashboard score */

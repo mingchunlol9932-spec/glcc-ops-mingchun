@@ -4,7 +4,7 @@ import { supabase, supabaseConfigured } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
-// A Vercel Cron hits this at 08:00 Malaysia time (UTC+8 → "0 0 * * *" in UTC)
+// A Vercel Cron hits this at 10:00 Malaysia time (UTC+8 → "0 2 * * *" in UTC)
 // and texts the owner a recap of everything that came in YESTERDAY. Guarded by
 // CRON_SECRET (Bearer) exactly like /api/digest, so only Vercel can trigger it.
 //
@@ -12,12 +12,6 @@ export const dynamic = 'force-dynamic'
 // is provable from the data: things CREATED yesterday — not status changes.
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET
-  // TEMP diagnostic — reports only whether the runtime sees CRON_SECRET, never its value.
-  const u = new URL(req.url)
-  if (u.searchParams.get('diag') === '1') {
-    const keys = Object.keys(process.env).filter(k => /cron|secret|pin/i.test(k))
-    return Response.json({ hasSecret: Boolean(secret), secretLen: (secret ?? '').length, matchingKeys: keys })
-  }
   if (secret && req.headers.get('authorization') !== `Bearer ${secret}`) {
     return new Response('forbidden', { status: 401 })
   }
