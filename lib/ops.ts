@@ -166,22 +166,18 @@ export type QEntry = {
   id: string; queue_number: number; name: string | null; phone: string | null; party_size: number
   status: string; created_at: string; seated_at: string | null; notes: string | null
 }
-export async function todaysQueue(): Promise<QEntry[]> {
+// Only the WAITING entries — the floor view's queue list. Crucially this filters
+// at the DB so a long day's cancelled/no-show/seated rows can't push the result
+// past Supabase's 1000-row cap and hide newly-joined guests. (Bug found by the
+// 1000+ join stress test: the old "all of today, every status" query truncated
+// at 1000 and the newest waiting guests silently disappeared from the floor.)
+export async function waitingQueue(): Promise<QEntry[]> {
   if (!supabaseConfigured) return []
   const { data } = await supabase.from('queue_entries').select('*')
-    .gte('created_at', startOfDayMYT().toISOString()).order('queue_number')
+    .eq('status', 'waiting')
+    .gte('created_at', startOfDayMYT().toISOString())
+    .order('queue_number').limit(1000)
   return (data ?? []) as QEntry[]
-}
-export async function addQueueEntry(name: string | null, pax: number, phone: string | null, notes: string | null) {
-  const today = await todaysQueue()
-  const next = today.reduce((m, e) => Math.max(m, e.queue_number), 0) + 1
-  // queue_entries.name is NOT NULL — default anonymous walk-ins to "Walk-up".
-  const { data, error } = await supabase.from('queue_entries').insert({
-    name: name && name.trim() ? name.trim() : 'Walk-up',
-    party_size: Math.max(1, Math.floor(pax)), phone, notes, status: 'waiting', queue_number: next,
-  }).select().single()
-  if (error) throw new Error(error.message)
-  return data
 }
 export async function cancelQueue(id: string) {
   await supabase.from('queue_entries').update({ status: 'cancelled', cancelled_at: new Date().toISOString() }).eq('id', id)
@@ -208,10 +204,19 @@ function suggestFor(pax: number, avail: { id: string; label: string; seats: numb
 // ---------------- floor state (drives the Floor page) ----------------
 export async function getFloorState() {
   const settings = await getSettings()
-  const [tables, visits, queue] = await Promise.all([listTables(), activeVisits(), todaysQueue()])
+  const [tables, visits, waiting] = await Promise.all([listTables(), activeVisits(), waitingQueue()])
 
   const visitById = new Map(visits.map(v => [v.id, v]))
-  const qById = new Map(queue.map(q => [q.id, q]))
+  // Queue numbers behind the currently-seated tables (for the Q-number badge).
+  // Fetched by id — at most one per occupied table — so it's correct no matter
+  // how many total entries exist today.
+  const seatIds = [...new Set(visits.map(v => v.queue_entry_id).filter(Boolean))] as string[]
+  const seatEntries = seatIds.length
+    ? ((await supabase.from('queue_entries').select('id,queue_number').in('id', seatIds)).data ?? [])
+    : []
+  const qById = new Map<string, { queue_number: number }>(
+    [...waiting, ...(seatEntries as { id: string; queue_number: number }[])].map(q => [q.id, { queue_number: q.queue_number }]),
+  )
   const floorTables = tables.map(t => {
     let visit: null | { id: string; pax: number; seated_at: string; minutes: number; customer: string | null; queue_number: number | null } = null
     if (t.status === 'seated' && t.active_visit_id) {
@@ -228,7 +233,6 @@ export async function getFloorState() {
   })
 
   const seated = visits.reduce((s, v) => s + v.pax_count, 0)
-  const waiting = queue.filter(q => q.status === 'waiting')
   const waitingPax = waiting.reduce((s, q) => s + q.party_size, 0)
   const availableSeats = settings.max_capacity - seated
   const avail = floorTables.filter(t => t.status === 'available').map(t => ({ id: t.id, label: t.label, seats: t.seats }))
