@@ -7,7 +7,6 @@ import type { Tab } from '@/lib/tabs'
 // sidebar becomes an off-canvas drawer opened by the top-bar hamburger, with a
 // tap-outside scrim and close-on-nav-tap. `conn` is the server-rendered
 // <ConnStatus /> passed down so this client wrapper never imports lib/supabase.
-// Access is PIN-gated by middleware — the footer button just clears that PIN.
 export default function Shell({
   conn,
   children,
@@ -18,11 +17,6 @@ export default function Shell({
   tabs: Tab[]
 }) {
   const [open, setOpen] = useState(false)
-
-  async function lock() {
-    await fetch('/api/dash/unlock', { method: 'DELETE' }).catch(() => {})
-    window.location.href = '/unlock?next=/dash'
-  }
 
   return (
     <div className="app">
@@ -49,9 +43,6 @@ export default function Shell({
       <aside className={`side ${open ? 'open' : ''}`}>
         <div className="brand"><span className="logo" aria-hidden="true" /> Gepuklah</div>
         <Nav tabs={tabs} onNavigate={() => setOpen(false)} />
-        <div className="userbox">
-          <button type="button" className="signout" onClick={lock}>🔒 Lock dashboard</button>
-        </div>
       </aside>
 
       <main className="main">{conn}{children}</main>

@@ -50,15 +50,7 @@ export function OpsProvider({ children }: { children: React.ReactNode }) {
 
   async function verify(p: string) {
     const r = await fetch('/api/ops/state', { headers: { 'x-queue-pin': p }, cache: 'no-store' })
-    if (r.ok) {
-      localStorage.setItem('queue_pin', p); setPin(p); setErr('')
-      // Same PIN unlocks the business dashboard — set its cookie too so the
-      // "Business ↗" tab opens without a second prompt.
-      fetch('/api/dash/unlock', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin: p }),
-      }).catch(() => {})
-    }
+    if (r.ok) { localStorage.setItem('queue_pin', p); setPin(p); setErr('') }
     else { setErr('Wrong PIN — try again.'); localStorage.removeItem('queue_pin') }
   }
   useEffect(() => { const p = localStorage.getItem('queue_pin'); if (p) verify(p) }, [])

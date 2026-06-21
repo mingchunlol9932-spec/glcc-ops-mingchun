@@ -1,7 +1,6 @@
 // Static list of business-dashboard tabs. The dashboard lives under /dash so it
-// never collides with the public queue at the site root. Protection is handled
-// by middleware.ts (a single staff PIN cookie) — there are no per-user roles
-// anymore, so this is just the nav order.
+// never collides with the public queue at the site root. There are no per-user
+// roles or PIN anymore, so this is just the nav order.
 
 export type Tab = { href: string; label: string }
 
