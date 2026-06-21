@@ -12,6 +12,11 @@ export const dynamic = 'force-dynamic'
 // is provable from the data: things CREATED yesterday — not status changes.
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET
+  // TEMP diagnostic — reports only whether the runtime sees CRON_SECRET, never its value.
+  const u = new URL(req.url)
+  if (u.searchParams.get('diag') === '1') {
+    return Response.json({ hasSecret: Boolean(secret), secretLen: (secret ?? '').length })
+  }
   if (secret && req.headers.get('authorization') !== `Bearer ${secret}`) {
     return new Response('forbidden', { status: 401 })
   }
