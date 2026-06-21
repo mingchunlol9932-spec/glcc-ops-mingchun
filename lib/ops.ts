@@ -99,10 +99,28 @@ export async function seatGroup(opts: {
   const cap = chosen.reduce((s, t) => s + t.seats, 0)
   if (cap < pax) throw new Error(`Those tables seat ${cap}. This group is ${pax} pax.`)
 
+  // ATOMIC guest claim: flip the queue entry waiting -> seated. Only ONE
+  // concurrent seating of the same guest can win this (the rest update 0 rows
+  // and bail BEFORE occupying any table), so a double-tap or two staff seating
+  // the same party can't put one group on multiple tables.
+  if (opts.queueEntryId) {
+    const { data: claimedEntry } = await supabase.from('queue_entries')
+      .update({ status: 'seated', seated_at: new Date().toISOString() })
+      .eq('id', opts.queueEntryId).eq('status', 'waiting')
+      .select('id')
+    if (!claimedEntry || claimedEntry.length === 0)
+      throw new Error('That guest has already been seated.')
+  }
+  // From here on, any failure must release the guest claim (back to 'waiting').
+  const releaseGuest = async () => {
+    if (opts.queueEntryId)
+      await supabase.from('queue_entries').update({ status: 'waiting', seated_at: null }).eq('id', opts.queueEntryId)
+  }
+
   const { data: v, error } = await supabase.from('visits').insert({
     pax_count: pax, customer_name: opts.customerName ?? null, queue_entry_id: opts.queueEntryId ?? null, status: 'seated',
   }).select().single()
-  if (error) throw new Error(error.message)
+  if (error) { await releaseGuest(); throw new Error(error.message) }
 
   // ATOMIC claim: only flips tables that are STILL 'available'. Postgres row
   // locks guarantee two concurrent seatings can't both win the same table —
@@ -114,17 +132,18 @@ export async function seatGroup(opts: {
     .eq('status', 'available')
     .select('id')
   if (claimErr || !claimed || claimed.length !== chosen.length) {
-    // Someone grabbed one of these tables first — release what we claimed and undo the visit.
+    // Someone grabbed one of these tables first — release what we claimed, undo
+    // the visit, and hand the guest back to the queue so they can be re-seated.
     await supabase.from('restaurant_tables')
       .update({ status: 'available', active_visit_id: null })
       .eq('active_visit_id', v.id)
     await supabase.from('visits').delete().eq('id', v.id)
+    await releaseGuest()
     throw new Error('One of those tables was just taken — please pick another.')
   }
 
   await supabase.from('visit_tables').insert(claimed.map(t => ({ visit_id: v.id, table_id: t.id })))
-  if (opts.queueEntryId)
-    await supabase.from('queue_entries').update({ status: 'seated', seated_at: new Date().toISOString() }).eq('id', opts.queueEntryId)
+  // The queue entry was already flipped to 'seated' atomically above.
   return v as Visit
 }
 
