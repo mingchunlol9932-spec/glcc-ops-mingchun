@@ -1,6 +1,6 @@
 import {
   seatGroup, customerLeft, markReady, markCleaning,
-  addQueueEntry, cancelQueue, noShowQueue, setSetting, setTableCapacity, setQueueOpen,
+  cancelQueue, noShowQueue, setSetting, setTableCapacity, setQueueOpen,
 } from '@/lib/ops'
 import { checkPin } from '@/lib/queue'
 import { supabase } from '@/lib/supabase'
@@ -19,10 +19,6 @@ export async function POST(req: Request) {
 
   try {
     switch (action) {
-      case 'seat_walkin': {
-        const v = await seatGroup({ pax: num('pax'), tableIds: ids('table_ids'), customerName: str('name') || null })
-        return Response.json({ ok: true, visit_id: v.id })
-      }
       case 'seat_queue': {
         const qid = str('queue_id')
         const { data: q } = await supabase.from('queue_entries').select('party_size,name').eq('id', qid).maybeSingle()
@@ -33,7 +29,6 @@ export async function POST(req: Request) {
       case 'customer_left': await customerLeft(str('visit_id')); break
       case 'mark_ready': await markReady(str('table_id')); break
       case 'mark_cleaning': await markCleaning(str('table_id')); break
-      case 'add_queue': await addQueueEntry(str('name') || null, num('pax'), str('phone') || null, str('notes') || null); break
       case 'cancel_queue': await cancelQueue(str('id')); break
       case 'no_show': await noShowQueue(str('id')); break
       case 'set_queue_open': await setQueueOpen(str('open') === 'true'); break

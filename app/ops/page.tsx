@@ -33,11 +33,11 @@ export default function FloorPage() {
   const [d, setD] = useState<State | null>(null)
   const [avg, setAvg] = useState('')
   const avgTouched = useRef(false)
-  const [seating, setSeating] = useState<{ pax: number; name: string | null; queueId: string | null } | null>(null)
+  // Everyone is in the one queue (they join by scanning the QR). Seating always
+  // picks a waiting guest and assigns table(s) — no separate "walk-in" path.
+  const [seating, setSeating] = useState<{ pax: number; name: string | null; queueId: string } | null>(null)
   const [picked, setPicked] = useState<string[]>([])
   const [seatModal, setSeatModal] = useState<{ tableId: string | null } | null>(null)
-  const [tab, setTab] = useState<'walkin' | 'queue'>('walkin')
-  const [wPax, setWPax] = useState('2'); const [wName, setWName] = useState('')
   const [detail, setDetail] = useState<FloorTable | null>(null)
   const [toast, setToast] = useState('')
 
@@ -53,10 +53,8 @@ export default function FloorPage() {
     if (!r.ok) { flash(r.error || 'Action failed'); return false }
     await load(); return true
   }
-  async function doSeat(tableIds: string[], pax: number, name: string | null, queueId: string | null) {
-    const ok = queueId
-      ? await act('seat_queue', { queue_id: queueId, table_ids: tableIds })
-      : await act('seat_walkin', { pax, name, table_ids: tableIds })
+  async function doSeat(tableIds: string[], queueId: string) {
+    const ok = await act('seat_queue', { queue_id: queueId, table_ids: tableIds })
     if (ok) { setSeating(null); setPicked([]); setSeatModal(null); setDetail(null) }
   }
 
@@ -66,12 +64,14 @@ export default function FloorPage() {
 
   function clickTable(t: FloorTable) {
     if (seating) { if (t.status === 'available') setPicked(p => p.includes(t.id) ? p.filter(x => x !== t.id) : [...p, t.id]); return }
-    if (t.status === 'available') { setSeatModal({ tableId: t.id }); setTab('walkin'); setWPax(String(Math.min(2, t.seats) || 2)); setWName('') }
+    if (t.status === 'available') setSeatModal({ tableId: t.id })
     else setDetail(t)
   }
-  function beginSeat(pax: number, name: string | null, queueId: string | null, fromTableId: string | null) {
+  // Start seating a waiting guest. If a single chosen table fits, seat right away;
+  // otherwise enter "pick table(s)" mode to combine.
+  function beginSeat(pax: number, name: string | null, queueId: string, fromTableId: string | null) {
     const table = fromTableId ? d!.tables.find(t => t.id === fromTableId) : null
-    if (table && pax <= table.seats) { doSeat([table.id], pax, name, queueId); return }
+    if (table && pax <= table.seats) { doSeat([table.id], queueId); return }
     if (table && !splitOk) { flash(`This table only has ${table.seats} seats.`); return }
     setSeating({ pax, name, queueId }); setPicked(table ? [table.id] : []); setSeatModal(null)
   }
@@ -103,13 +103,12 @@ export default function FloorPage() {
         {/* Queue summary */}
         <aside className="qsum">
           <div className="qsum-h"><b>Waiting</b><a className="qlink" href="/ops/queue">Manage →</a></div>
-          {d.queue.length === 0 ? <p className="qsub">No one waiting.</p> : d.queue.map(q => (
+          {d.queue.length === 0 ? <p className="qsub">No one waiting. Guests join by scanning the QR code.</p> : d.queue.map(q => (
             <div key={q.id} className="qsi">
               <div><b>{qfmt(q.queue_number)}</b> · {q.party_size} pax <span className="qmeta">{q.name || ''} · {q.waitMin}m · {q.suggestion}</span></div>
               <button className="qbtn sm" onClick={() => beginSeat(q.party_size, q.name, q.id, null)}>Seat</button>
             </div>
           ))}
-          <button className="qbtn ghost sm wfull" onClick={() => { setSeatModal({ tableId: null }); setTab('walkin'); setWPax('2'); setWName('') }}>+ Seat walk-in</button>
         </aside>
 
         {/* Floor map */}
@@ -140,39 +139,24 @@ export default function FloorPage() {
       {/* Seating banner */}
       {seating && (
         <div className="qseatbar floatbar">
-          <span>🪑 {seating.queueId ? '' : 'Walk-in '}{seating.name ? <b>{seating.name}</b> : ''} {seating.pax} pax — pick table(s): <b>{pickedTables.map(t => t.label).join('+') || '—'}</b> ({pickedSeats}/{seating.pax}{pickedSeats >= seating.pax ? ' ✓' : ''})</span>
+          <span>🪑 {seating.name ? <b>{seating.name}</b> : ''} {seating.pax} pax — pick table(s): <b>{pickedTables.map(t => t.label).join('+') || '—'}</b> ({pickedSeats}/{seating.pax}{pickedSeats >= seating.pax ? ' ✓' : ''})</span>
           <div className="qseatbtns">
-            {picked.length > 0 && <button className="qbtn go sm" onClick={() => doSeat(picked, seating.pax, seating.name, seating.queueId)}>Seat</button>}
+            {picked.length > 0 && <button className="qbtn go sm" onClick={() => doSeat(picked, seating.queueId)}>Seat</button>}
             <button className="qbtn sm" onClick={() => { setSeating(null); setPicked([]) }}>Cancel</button>
           </div>
         </div>
       )}
 
-      {/* Seat modal (available table or walk-in) */}
+      {/* Seat modal — pick a waiting guest to seat at the chosen table */}
       {seatModal && (
-        <Modal onClose={() => setSeatModal(null)} title={seatModal.tableId ? `Seat at ${d.tables.find(t => t.id === seatModal.tableId)?.label}` : 'Seat walk-in'}>
-          <div className="segtabs">
-            <button className={tab === 'walkin' ? 'on' : ''} onClick={() => setTab('walkin')}>Walk-in</button>
-            <button className={tab === 'queue' ? 'on' : ''} onClick={() => setTab('queue')}>From queue</button>
-          </div>
-          {tab === 'walkin' ? (
-            <>
-              <label className="fld">Pax<div className="stepper">
-                <button onClick={() => setWPax(String(Math.max(1, Number(wPax) - 1)))}>−</button>
-                <input type="number" min={1} value={wPax} onChange={e => setWPax(e.target.value)} />
-                <button onClick={() => setWPax(String(Number(wPax) + 1))}>+</button>
-              </div></label>
-              <label className="fld">Name / note (optional)<input value={wName} onChange={e => setWName(e.target.value)} placeholder="optional" /></label>
-              <button className="qbtn wfull" onClick={() => beginSeat(Math.max(1, Number(wPax)), wName || null, null, seatModal.tableId)}>Seat {wPax} pax</button>
-            </>
-          ) : (
-            d.queue.length === 0 ? <p className="qsub">No waiting groups.</p> :
-              <div className="qpick">{d.queue.map(q => (
-                <button key={q.id} className="qpickrow" onClick={() => beginSeat(q.party_size, q.name, q.id, seatModal.tableId)}>
-                  <b>{qfmt(q.queue_number)}</b> · {q.party_size} pax <span className="qmeta">{q.name || ''}</span>
-                </button>
-              ))}</div>
-          )}
+        <Modal onClose={() => setSeatModal(null)} title={seatModal.tableId ? `Seat at ${d.tables.find(t => t.id === seatModal.tableId)?.label}` : 'Seat next guest'}>
+          {d.queue.length === 0
+            ? <p className="qsub">No one waiting. Guests join by scanning the QR code.</p>
+            : <div className="qpick">{d.queue.map(q => (
+              <button key={q.id} className="qpickrow" onClick={() => beginSeat(q.party_size, q.name, q.id, seatModal.tableId)}>
+                <b>{qfmt(q.queue_number)}</b> · {q.party_size} pax <span className="qmeta">{q.name || ''}</span>
+              </button>
+            ))}</div>}
         </Modal>
       )}
 
