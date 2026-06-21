@@ -459,6 +459,9 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
    Gepuklah Ops — floor / queue / dashboard / reports / settings
    ============================================================ */
 .ops { max-width: 1000px; margin: 0 auto; padding: 14px 16px 90px; }
+/* While seating, the floating pick-table bar sits at the bottom — give the floor
+   extra room so it never covers the last row of tables (A2 / D1–D8). */
+.ops.seatpad { padding-bottom: 150px; }
 .ph2 { font-size: 20px; font-weight: 700; margin: 6px 0 14px; }
 .sec { font-size: 13px; color: var(--muted); font-weight: 600; margin: 22px 0 10px; }
 .wfull { width: 100%; }

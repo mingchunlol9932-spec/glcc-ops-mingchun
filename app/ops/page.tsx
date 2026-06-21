@@ -80,7 +80,7 @@ export default function FloorPage() {
   const pickedSeats = pickedTables.reduce((s, t) => s + t.seats, 0)
 
   return (
-    <div className="ops">
+    <div className={seating ? 'ops seatpad' : 'ops'}>
       {/* KPI bar */}
       <div className="kpis">
         <div className="kpi"><span className="kl">In line</span><span className="kv">{k.waitingGroups}<small> grp</small> / {k.waitingPax}<small> pax</small></span></div>
