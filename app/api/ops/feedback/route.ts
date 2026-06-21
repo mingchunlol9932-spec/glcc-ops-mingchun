@@ -45,6 +45,14 @@ export async function POST(req: Request) {
   if (action === 'resolve') await supabase.from('records').update({ status: 'resolved' }).eq('id', id)
   else if (action === 'reopen') await supabase.from('records').update({ status: 'new' }).eq('id', id)
   else if (action === 'set_google_url') await supabase.from('app_settings').upsert({ key: 'google_review_url', value: String(body.url ?? ''), updated_at: new Date().toISOString() })
+  else if (action === 'add') {
+    const title = (String(body.customer ?? '').trim() || 'Anonymous').slice(0, 80)
+    const rating = Math.max(0, Math.min(5, Math.round(Number(body.rating) || 0)))
+    const source = String(body.source ?? '').trim() || 'Walk-in'
+    const comment = String(body.comment ?? '').trim()
+    if (!comment && !rating) return Response.json({ ok: false, error: 'Add a rating or a comment.' }, { status: 400 })
+    await supabase.from('records').insert({ title, status: 'new', category: 'feedback', notes: comment || null, meta: { rating, source, author: title } })
+  }
   else return Response.json({ ok: false, error: 'bad_action' }, { status: 400 })
   return Response.json({ ok: true })
 }
