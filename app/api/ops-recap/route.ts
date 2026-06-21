@@ -15,7 +15,8 @@ export async function GET(req: Request) {
   // TEMP diagnostic — reports only whether the runtime sees CRON_SECRET, never its value.
   const u = new URL(req.url)
   if (u.searchParams.get('diag') === '1') {
-    return Response.json({ hasSecret: Boolean(secret), secretLen: (secret ?? '').length })
+    const keys = Object.keys(process.env).filter(k => /cron|secret|pin/i.test(k))
+    return Response.json({ hasSecret: Boolean(secret), secretLen: (secret ?? '').length, matchingKeys: keys })
   }
   if (secret && req.headers.get('authorization') !== `Bearer ${secret}`) {
     return new Response('forbidden', { status: 401 })
