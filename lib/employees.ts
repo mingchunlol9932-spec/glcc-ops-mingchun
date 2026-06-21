@@ -147,3 +147,35 @@ export async function setEmployeeStatus(name: string, status: string): Promise<b
   if (error) { console.warn('[GLCC] setEmployeeStatus failed:', error.message); return false }
   return true
 }
+
+// Columns the bot is allowed to set when adding/editing a team member. Anything
+// not in this list (id, created_at, …) is ignored, so a bad parse can't write junk.
+const EMP_COLUMNS = [
+  'role', 'department', 'employment_type', 'status', 'pay_type',
+  'hourly_rate', 'monthly_salary', 'weekly_hours', 'work_days', 'start_date', 'email',
+] as const
+function pickEmpFields(fields: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const k of EMP_COLUMNS) if (fields[k] != null) out[k] = fields[k]
+  return out
+}
+
+// Add a new team member. `name` is required; everything else falls back to the
+// table defaults (hourly, active, Mon–Fri, etc.).
+export async function createEmployee(name: string, fields: Record<string, unknown>): Promise<boolean> {
+  if (!supabaseConfigured) return false
+  const { error } = await supabase.from('employees').insert({ name, ...pickEmpFields(fields) })
+  if (error) { console.warn('[GLCC] createEmployee failed:', error.message); return false }
+  return true
+}
+
+// Edit an existing member's record (role, pay, recurring work_days, etc.).
+// Returns false when there's nothing valid to change.
+export async function updateEmployeeFields(name: string, fields: Record<string, unknown>): Promise<boolean> {
+  if (!supabaseConfigured) return false
+  const patch = pickEmpFields(fields)
+  if (!Object.keys(patch).length) return false
+  const { error } = await supabase.from('employees').update(patch).eq('name', name)
+  if (error) { console.warn('[GLCC] updateEmployeeFields failed:', error.message); return false }
+  return true
+}

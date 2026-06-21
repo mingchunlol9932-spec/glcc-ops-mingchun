@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { sendMessage } from '@/lib/telegram'
 import { loadTurns, appendTurn } from '@/lib/bot-memory'
 import { getRecords } from '@/lib/records'
-import { getEmployees, getOverrides, setEmployeeStatus, upsertOverride, staffMessage, STATUS_FROM_REASON, prettyDate } from '@/lib/employees'
+import { getEmployees, getOverrides, setEmployeeStatus, upsertOverride, createEmployee, updateEmployeeFields, staffMessage, STATUS_FROM_REASON, prettyDate } from '@/lib/employees'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,8 +40,15 @@ export async function POST(req: Request) {
   if (msg.text.trim().toLowerCase() === '/start') {
     await sendMessage(chatId,
       '🤖 Ask me about your records — e.g. "how much is in pipeline?".\n\n' +
-      '👥 Staff: tell me about availability — e.g. "Sarah on MC", "Mei annual leave", "Jason can work" — and I\'ll update the roster. Ask "who\'s working today?" anytime.')
+      '👥 Staff availability — "Sarah on MC tomorrow", "Mel on leave next week", "Jason can work" — I\'ll update the roster.\n\n' +
+      '🗂️ Manage the team — "Add Lina as part-time service crew, RM12/hr, works Fri Sat Sun", "Kelly now works Mon–Thu", "Amir\'s rate is RM4500/month", "Remove Service Crew". Changes save to Supabase and show on HR + Timetable. Ask "who\'s working today?" anytime.')
     return Response.json({ ok: true })
+  }
+
+  // 1a) Staff RECORD change? (add / edit / remove a person, change pay/role/recurring days)
+  if (/\b(add|hire|hired|onboard|new (staff|employee|crew|member|hire)|remove|delete|fire|fired|resign|resigned|quit|terminat|rename|salary|wage|pay|rate|earns?|role|position|department|recurring|permanent|monthly|hourly|rm ?\d)\b/i.test(msg.text)) {
+    const reply = await tryStaffAdmin(msg.text)
+    if (reply) { await sendMessage(chatId, reply); return Response.json({ ok: true }) }
   }
 
   // 1b) Staff availability update? ("Sarah can work this weekend", "Kumar MC tomorrow", "Mei annual leave")
@@ -87,6 +94,82 @@ export async function POST(req: Request) {
   await appendTurn(chatId, msg.text, answer)
   await sendMessage(chatId, answer)
   return Response.json({ ok: true })
+}
+
+// Parse a staff-RECORD command with Claude — add a new member, edit an existing
+// one (role / department / pay / recurring work_days / email), or remove (mark
+// 'left'). Writes to the employees table. Returns a confirmation, or null when
+// the message isn't a record change (e.g. it's a date-specific availability note
+// or just a question), so it falls through to the availability/Q&A handlers.
+async function tryStaffAdmin(text: string): Promise<string | null> {
+  const employees = await getEmployees()
+  const names = employees.map(e => e.name)
+  const todayISO = isoMYT()
+
+  type Fields = {
+    role?: string; department?: string; employment_type?: string; pay_type?: string
+    hourly_rate?: number; monthly_salary?: number; weekly_hours?: number
+    work_days?: string[]; email?: string; start_date?: string
+  }
+  let p: { op?: string | null; name?: string | null; fields?: Fields } = {}
+  try {
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY?.trim() })
+    const res = await anthropic.messages.create({
+      model: 'claude-haiku-4-5',
+      max_tokens: 320,
+      system:
+        `Today is ${todayISO} (Asia/Kuala_Lumpur). Existing employees: ${names.join(', ') || '(none)'}.\n` +
+        `Interpret the message as a STAFF RECORD change and reply ONLY compact JSON:\n` +
+        `{"op":"add"|"update"|"remove"|null,"name":<string>,"fields":{"role":string,"department":string,` +
+        `"employment_type":"full_time"|"part_time","pay_type":"hourly"|"monthly","hourly_rate":number,` +
+        `"monthly_salary":number,"weekly_hours":number,"work_days":["Mon","Tue",...],"email":string,"start_date":"YYYY-MM-DD"}}\n` +
+        `op=add: a NEW hire (name = their name). op=update or remove: name MUST be an exact match from the existing list above.\n` +
+        `work_days = recurring weekly days (Mon Tue Wed Thu Fri Sat Sun). Money: RM amounts → hourly_rate or monthly_salary (set pay_type to match).\n` +
+        `Only include fields that are explicitly stated; omit everything else. If the message is about temporary leave / MC / being off on a specific date, set op=null (that is handled elsewhere). If it is not a staff record change at all, set op=null.`,
+      messages: [{ role: 'user', content: text }],
+    })
+    const raw = res.content.find(c => c.type === 'text')?.text ?? '{}'
+    p = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] ?? '{}')
+  } catch {
+    return null
+  }
+
+  const op = p.op
+  const name = (p.name || '').trim()
+  if (!op || !name) return null
+  const f = (p.fields || {}) as Record<string, unknown>
+
+  if (op === 'add') {
+    if (names.includes(name)) return `<b>${name}</b> is already on the team — say "update ${name} …" to change their details.`
+    if (!(await createEmployee(name, f))) return `⚠️ Couldn't add ${name} — try again in a moment.`
+    const bits = summariseFields(f)
+    return `➕ Added <b>${name}</b>${bits ? ' — ' + bits : ''}. They're on HR + Timetable now.`
+  }
+  if (op === 'update') {
+    if (!names.includes(name)) return `I don't have anyone called "${name}". Existing: ${names.join(', ')}.`
+    if (!(await updateEmployeeFields(name, f))) return `⚠️ Nothing to change for ${name} — tell me which field (role, pay, days, …).`
+    return `✏️ Updated <b>${name}</b> — ${summariseFields(f) || 'changes saved'}.`
+  }
+  if (op === 'remove') {
+    if (!names.includes(name)) return `I don't have anyone called "${name}".`
+    if (!(await setEmployeeStatus(name, 'left'))) return `⚠️ Couldn't remove ${name} — try again in a moment.`
+    return `👋 Marked <b>${name}</b> as left — off the timetable now. Their record is kept; say "${name} can work" to bring them back.`
+  }
+  return null
+}
+
+// Human-readable summary of the fields we just wrote, for the confirmation reply.
+function summariseFields(f: Record<string, unknown>): string {
+  const parts: string[] = []
+  if (f.role) parts.push(String(f.role))
+  if (f.department) parts.push(String(f.department))
+  if (f.employment_type) parts.push(String(f.employment_type).replace('_', ' '))
+  if (f.monthly_salary != null) parts.push(`RM${f.monthly_salary}/mo`)
+  if (f.hourly_rate != null) parts.push(`RM${f.hourly_rate}/hr`)
+  if (f.weekly_hours != null) parts.push(`${f.weekly_hours}h/wk`)
+  if (Array.isArray(f.work_days) && f.work_days.length) parts.push((f.work_days as string[]).join('/'))
+  if (f.email) parts.push(String(f.email))
+  return parts.join(', ')
 }
 
 // Parse an availability message with Claude — who, work-or-off, which dates, and
