@@ -371,6 +371,8 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 
 /* HR employment-type + status pills (base .pill / active / scheduled etc. exist above). */
 .pill.on_leave { background: rgba(239,159,39,0.16); color: #ffcf80; }
+.pill.mc { background: rgba(226,75,74,0.18); color: #ff9b9b; }
+.pill.annual_leave { background: rgba(124,227,212,0.16); color: #7fe3d4; }
 .pill.probation { background: rgba(55,138,221,0.16); color: #8ec5ff; }
 .pill.left { background: rgba(226,75,74,0.18); color: #ff9b9b; }
 .pill.full_time { background: rgba(29,158,117,0.16); color: #86e0b8; }

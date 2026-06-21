@@ -24,6 +24,7 @@ const TABS = [
   { href: '/ops/queue', label: 'Queue' },
   { href: '/ops/dashboard', label: 'Dashboard' },
   { href: '/ops/settings', label: 'Settings' },
+  { href: '/hr', label: 'Staff ↗' },
 ]
 
 function OpsNav() {

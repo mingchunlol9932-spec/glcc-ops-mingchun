@@ -51,3 +51,110 @@ export async function getEmployees(): Promise<Employee[]> {
 // 'full_time' -> 'full time', 'on_leave' -> 'on leave' (for display only;
 // the raw value still drives the .pill CSS class).
 export const labelize = (s: string) => s.replace(/_/g, ' ')
+
+// ---- Staff availability (8am digest + Telegram bot updates) ----
+export const WORKING_STATUSES = ['active', 'probation']
+export const LEAVE_LABEL: Record<string, string> = { mc: 'medical', annual_leave: 'annual', on_leave: 'leave' }
+export const isWorking = (s: string) => WORKING_STATUSES.includes(s)
+export const isOnLeave = (s: string) => s in LEAVE_LABEL
+
+const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const MO = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+// A one-day exception to the weekly pattern: someone works ('work') or is off
+// ('off') on a specific date, regardless of their usual work_days.
+export type Override = {
+  id: number
+  name: string
+  date: string          // 'YYYY-MM-DD'
+  kind: 'work' | 'off'
+  reason: string | null
+  created_at: string
+}
+
+export async function getOverrides(): Promise<Override[]> {
+  if (!supabaseConfigured) return []
+  const { data, error } = await supabase.from('shift_overrides').select('*')
+  if (error) { console.warn('[GLCC] could not read shift_overrides:', error.message); return [] }
+  return (data ?? []) as Override[]
+}
+
+export async function upsertOverride(name: string, date: string, kind: 'work' | 'off', reason: string | null): Promise<boolean> {
+  if (!supabaseConfigured) return false
+  const { error } = await supabase.from('shift_overrides').upsert({ name, date, kind, reason }, { onConflict: 'name,date' })
+  if (error) { console.warn('[GLCC] upsertOverride failed:', error.message); return false }
+  return true
+}
+
+export const ovKey = (name: string, dateISO: string) => `${name}|${dateISO}`
+export function ovMapOf(overrides: Override[]): Map<string, Override> {
+  const m = new Map<string, Override>()
+  for (const o of overrides) m.set(ovKey(o.name, o.date), o)
+  return m
+}
+
+// Working on this date? An override wins over the weekly pattern; 'left' never works.
+export function worksOn(e: Employee, weekday: string, dateISO: string, ov: Map<string, Override>): boolean {
+  if (e.status === 'left') return false
+  const o = ov.get(ovKey(e.name, dateISO))
+  if (o) return o.kind === 'work'
+  return isWorking(e.status) && (e.work_days ?? []).includes(weekday)
+}
+
+const isoUTC = (d: Date) => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
+
+// 'YYYY-MM-DD' -> 'Sat 21 Jun' for friendly confirmations.
+export function prettyDate(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number)
+  const dt = new Date(Date.UTC(y, m - 1, d))
+  return `${WD[dt.getUTCDay()]} ${d} ${MO[m - 1]}`
+}
+
+// "Today" in Malaysia (UTC+8), so a 00:00-UTC cron reads the correct weekday.
+export function staffToday(team: Employee[], overrides: Override[] = []) {
+  const myt = new Date(Date.now() + 8 * 3600 * 1000)
+  const day = WD[myt.getUTCDay()]
+  const dateISO = isoUTC(myt)
+  const dateLabel = `${day} ${myt.getUTCDate()} ${MO[myt.getUTCMonth()]}`
+  const ov = ovMapOf(overrides)
+  const alive = team.filter(e => e.status !== 'left')
+
+  const working = alive.filter(e => worksOn(e, day, dateISO, ov))
+  const workingNames = new Set(working.map(e => e.name))
+  const onLeave = alive.flatMap(e => {
+    if (workingNames.has(e.name)) return []
+    const o = ov.get(ovKey(e.name, dateISO))
+    if (o && o.kind === 'off') return [{ name: e.name, reason: o.reason || 'off' }]
+    if (isOnLeave(e.status)) return [{ name: e.name, reason: LEAVE_LABEL[e.status] }]
+    return []
+  })
+  const offNames = new Set(onLeave.map(x => x.name))
+  const offToday = alive.filter(e => !workingNames.has(e.name) && !offNames.has(e.name))
+  return { day, dateLabel, working, onLeave, offToday }
+}
+
+// The Telegram message body — shared by the cron and the on-demand bot reply.
+export function staffMessage(team: Employee[], overrides: Override[] = []): string {
+  const { dateLabel, working, onLeave, offToday } = staffToday(team, overrides)
+  return (
+    `☀️ <b>Staff today — ${dateLabel}</b>\n` +
+    `\n✅ <b>Working (${working.length}):</b>\n` +
+    (working.length ? working.map(e => `• ${e.name}${e.department ? ` <i>(${e.department})</i>` : ''}`).join('\n') : '• —') +
+    (onLeave.length
+      ? `\n\n🤒 <b>On leave (${onLeave.length}):</b>\n` + onLeave.map(x => `• ${x.name} — ${x.reason}`).join('\n')
+      : `\n\n🟢 Nobody on leave today.`) +
+    (offToday.length ? `\n\n😴 <b>Off (not scheduled):</b> ${offToday.map(e => e.name).join(', ')}` : '')
+  )
+}
+
+// Map a leave reason to a permanent DB status (used when no date is given).
+export const STATUS_FROM_REASON: Record<string, string> = {
+  mc: 'mc', annual: 'annual_leave', leave: 'on_leave', extra: 'active', working: 'active',
+}
+
+export async function setEmployeeStatus(name: string, status: string): Promise<boolean> {
+  if (!supabaseConfigured) return false
+  const { error } = await supabase.from('employees').update({ status }).eq('name', name)
+  if (error) { console.warn('[GLCC] setEmployeeStatus failed:', error.message); return false }
+  return true
+}
