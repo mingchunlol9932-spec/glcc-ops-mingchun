@@ -2,16 +2,12 @@ import {
   seatGroup, customerLeft, markReady, markCleaning,
   cancelQueue, noShowQueue, setSetting, setTableCapacity, setQueueOpen,
 } from '@/lib/ops'
-import { checkPin } from '@/lib/queue'
 import { supabase } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({} as Record<string, unknown>))
-  if (!checkPin(req.headers.get('x-queue-pin') ?? (body.pin as string))) {
-    return Response.json({ ok: false, error: 'bad_pin' }, { status: 401 })
-  }
   const action = String(body.action ?? '')
   const str = (k: string) => (body[k] != null ? String(body[k]) : '')
   const num = (k: string) => Number(body[k]) || 0

@@ -1,5 +1,5 @@
 'use client'
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
@@ -43,32 +43,9 @@ function OpsNav() {
   )
 }
 
+// No PIN gate — the Ops console opens directly. The pin in context is empty;
+// the API routes no longer require it. (Keep the context so the page components
+// can stay unchanged.)
 export function OpsProvider({ children }: { children: React.ReactNode }) {
-  const [pin, setPin] = useState<string | null>(null)
-  const [input, setInput] = useState('')
-  const [err, setErr] = useState('')
-
-  async function verify(p: string) {
-    const r = await fetch('/api/ops/state', { headers: { 'x-queue-pin': p }, cache: 'no-store' })
-    if (r.ok) { localStorage.setItem('queue_pin', p); setPin(p); setErr('') }
-    else { setErr('Wrong PIN — try again.'); localStorage.removeItem('queue_pin') }
-  }
-  useEffect(() => { const p = localStorage.getItem('queue_pin'); if (p) verify(p) }, [])
-
-  if (!pin) {
-    return (
-      <div className="qwrap">
-        <div className="qcard center">
-          <h1 className="qtitle">Gepuklah Ops</h1>
-          <p className="qsub">Enter the staff PIN.</p>
-          <input className="qpin" value={input} onChange={e => setInput(e.target.value)}
-            type="password" inputMode="numeric" placeholder="PIN"
-            onKeyDown={e => { if (e.key === 'Enter') verify(input) }} />
-          {err && <p className="qerr">{err}</p>}
-          <button className="qbtn" onClick={() => verify(input)}>Unlock</button>
-        </div>
-      </div>
-    )
-  }
-  return <Ctx.Provider value={{ pin }}><OpsNav />{children}</Ctx.Provider>
+  return <Ctx.Provider value={{ pin: '' }}><OpsNav />{children}</Ctx.Provider>
 }

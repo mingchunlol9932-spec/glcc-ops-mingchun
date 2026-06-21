@@ -1,4 +1,3 @@
-import { checkPin } from '@/lib/queue'
 import { supabase, supabaseConfigured } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
@@ -14,9 +13,7 @@ async function feedbackRows(): Promise<Rec[]> {
   return (data ?? []).map((r) => ({ ...(r as Rec), meta: (r as Rec).meta ?? {} }))
 }
 
-export async function GET(req: Request) {
-  const pin = req.headers.get('x-queue-pin') ?? new URL(req.url).searchParams.get('pin')
-  if (!checkPin(pin)) return Response.json({ ok: false, error: 'bad_pin' }, { status: 401 })
+export async function GET() {
   if (!supabaseConfigured) return Response.json({ ok: false, error: 'Database not connected.' }, { status: 503 })
 
   const rows = await feedbackRows()
@@ -39,7 +36,6 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({} as Record<string, unknown>))
-  if (!checkPin(req.headers.get('x-queue-pin') ?? (body.pin as string))) return Response.json({ ok: false, error: 'bad_pin' }, { status: 401 })
   const action = String(body.action ?? '')
   const id = Number(body.id)
   if (action === 'resolve') await supabase.from('records').update({ status: 'resolved' }).eq('id', id)
